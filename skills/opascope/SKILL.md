@@ -8,7 +8,7 @@ metadata:
     codex: full; dollar-name invocation or direct reading
 ---
 
-# Opascope Skills
+# Opascope work-process skills for Claude Code and Codex CLI
 
 Read [shared.md](shared.md) first. Route to the smallest useful workflow.
 

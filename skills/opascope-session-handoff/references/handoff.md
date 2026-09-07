@@ -1,4 +1,4 @@
-# Handoff shape
+# Session handoff template for picking the work up later
 
 ```markdown
 # Handoff: task title

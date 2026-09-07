@@ -8,7 +8,7 @@ metadata:
     codex: full; independent reviewer when available, otherwise recorded sequential review
 ---
 
-# Planning
+# Plan agent work with a check on every step
 
 Read [shared.md](shared.md) first. Save the plan with kind `plan`.
 
