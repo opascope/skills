@@ -134,10 +134,8 @@ Checking against the real agents needs your own logged-in CLI. See `docs/verific
 
 `plainlang.py` is the gate on this file and on every skill name. It checks your wording. A contributor should know their wording will be checked.
 
-## License and credit
+## License and contributing
 
 MIT licensed, copyright Opascope.
-
-While working out how to package this, we looked at [gstack](https://github.com/garrytan/gstack). None of its code or writing appears here.
 
 Contributions should keep the package small. Keep the files readable on their own. Keep the install free of anything you have to install first.

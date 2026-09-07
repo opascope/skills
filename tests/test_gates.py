@@ -108,6 +108,15 @@ class PlainLanguageTests(unittest.TestCase):
                 self.assertTrue(plainlang.FIXED_COUNT.search(phrase))
         self.assertIsNone(plainlang.FIXED_COUNT.search('the skills in this package'))
 
+    def test_no_document_names_another_package(self):
+        findings, _ = plainlang.check()
+        self.assertEqual([f for f in findings if 'mentions' in f['message']], [])
+        self.assertTrue(plainlang.NO_MENTION)
+
+    def test_gate_catches_a_named_package(self):
+        self.assertEqual(plainlang.outside_mentions('Built after reading gstack.'), ['gstack'])
+        self.assertEqual(plainlang.outside_mentions('Nothing to cite here.'), [])
+
     def test_every_skill_is_listed_in_the_readme(self):
         table = set((ROOT / 'README.md').read_text().split())
         for path in (ROOT / 'skills').iterdir():

@@ -42,6 +42,9 @@ INSIDER = {
 FIXED_COUNT = re.compile(
     r'\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+'
     r'(work-process\s+|process\s+)?skills\b', re.I)
+# Names that must not appear anywhere in the package. Reading how another
+# project was put together is not a reason to advertise it in our own docs.
+NO_MENTION = ('gstack', 'garrytan')
 GRADE_CEILING = 8.0
 SENTENCE_CEILING = 17.0
 NAME_TOKENS = (1, 3)
@@ -102,6 +105,11 @@ def insider_hits(text):
     return found
 
 
+def outside_mentions(text):
+    return [name for name in NO_MENTION
+            if re.search(r'(?<![\w-])' + re.escape(name) + r'(?![\w-])', text, re.I)]
+
+
 def fail(findings, surface, message, fix=''):
     findings.append({'severity': 'fail', 'surface': surface, 'message': message, 'fix': fix})
 
@@ -135,6 +143,12 @@ def check():
         for match in FIXED_COUNT.finditer(path.read_text()):
             fail(findings, path.name, f'states a fixed number of skills: "{match.group(0)}"',
                  'write it so adding a skill does not date the sentence')
+
+    for path in sorted(ROOT.glob('*.md')) + sorted(ROOT.glob('docs/*.md')) + \
+            sorted(ROOT.glob('skills/*/**/*.md')):
+        for name in outside_mentions(path.read_text()):
+            fail(findings, str(path.relative_to(ROOT)),
+                 f'mentions "{name}"', 'this package does not reference other packages')
 
     table = {name: sentence.strip() for name, sentence in re.findall(
         r'^\|\s*`?([a-z][a-z0-9-]*)`?\s*\|\s*(.+?)\s*\|\s*$', readme, re.M)}
