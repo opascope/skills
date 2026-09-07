@@ -1,4 +1,4 @@
-# Local usage measurement
+# Measuring which Claude Code and Codex skills you actually use
 
 `python3 kit.py usage` scans JSONL below the standard Claude Code project
 transcript directory and Codex session directory in the user's home. Supply

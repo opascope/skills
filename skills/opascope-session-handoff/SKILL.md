@@ -8,7 +8,7 @@ metadata:
     codex: full; identical artifact publication and resume
 ---
 
-# Session handoff
+# Hand off context between Claude Code or Codex sessions
 
 Read [shared.md](shared.md) first. Publish with kind `handoff`. This single
 artifact is the pickup contract; no runtime-specific state capture is needed.

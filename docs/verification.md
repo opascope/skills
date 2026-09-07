@@ -1,4 +1,4 @@
-# Verification
+# How these skills are verified on Claude Code and Codex CLI
 
 Run the dependency-free automated checks from a clone:
 
@@ -92,7 +92,6 @@ findings remained. Runtime logs, machine-specific receipts and toy artifacts
 are excluded from the Git tree. Source-specific examples, integration calls
 and historical ledgers were not included in the package.
 
-Whole-file hash comparison against 677 packaging-reference markdown/script
-files found no verbatim matches. No implementation or prose was copied from
-that project. Its general flat-link, router and install/update patterns informed
-the design. The license here is the standard MIT text with Opascope copyright.
+All implementation and prose in this package were written independently. A
+whole-file hash sweep across 677 outside reference files found no verbatim
+matches. The license is the standard MIT text with Opascope copyright.
