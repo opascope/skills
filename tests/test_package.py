@@ -67,6 +67,22 @@ class InstallerTests(TemporaryTest):
             install.install(self.base, ['claude'])
         self.assertEqual(before, snapshot(self.base))
 
+    def test_retired_owned_link_removed_but_changed_one_preserved(self):
+        install.install(self.base, ['codex'])
+        keep = install.desired_links(self.base, ['codex'])
+        removed = '.agents/skills/opascope/kit.py'
+        changed = '.agents/skills/opascope/shared.md'
+        keep.pop(removed); keep.pop(changed)
+        path = self.base / changed
+        path.unlink()
+        path.write_text('user-owned replacement')
+        with patch.object(install, 'desired_links', return_value=keep):
+            install.install(self.base, ['codex'])
+        self.assertFalse((self.base / removed).is_symlink())
+        self.assertEqual(path.read_text(), 'user-owned replacement')
+        install.uninstall(self.base)
+        self.assertEqual(path.read_text(), 'user-owned replacement')
+
     def test_uninstall_preserves_user_additions_and_replaced_files(self):
         install.install(self.base, ['codex'])
         target = self.base / '.agents/skills/opascope/SKILL.md'
@@ -256,6 +272,30 @@ class LoopTests(TemporaryTest):
             return (0, 'all done') if prompt else original(argv, cwd, seconds, prompt)
         with patch.object(loops, 'execute', worker):
             self.assertEqual(loops.run(task, 'codex', 1, 10), 3)
+        self.assertFalse(list(task.glob('completion-*.md')))
+
+    def test_no_progress_stops_before_budget_and_keeps_checkpoint(self):
+        task = self.fixture()
+        original = loops.execute
+        calls = []
+        def worker(argv, cwd, seconds, prompt=None):
+            if prompt:
+                calls.append(prompt)
+                return 0, 'still considering'
+            return original(argv, cwd, seconds, prompt)
+        with patch.object(loops, 'execute', worker):
+            self.assertEqual(loops.run(task, 'codex', 10, 10), 3)
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(list(task.glob('pause-*.md')))
+        self.assertTrue((task / 'NOTES.md').exists())
+
+    def test_runtime_failure_is_not_completion(self):
+        task = self.fixture()
+        original = loops.execute
+        def worker(argv, cwd, seconds, prompt=None):
+            return (7, 'runtime failed') if prompt else original(argv, cwd, seconds, prompt)
+        with patch.object(loops, 'execute', worker):
+            self.assertEqual(loops.run(task, 'codex', 10, 10), 2)
         self.assertFalse(list(task.glob('completion-*.md')))
 
     def test_blocker_and_mutation_stop(self):
