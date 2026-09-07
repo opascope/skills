@@ -120,3 +120,9 @@ any phrase stating how many skills exist. Skill bodies are exempt, since only an
 agent reads them; frontmatter descriptions are reported as warnings. The gate also
 fails when a README table sentence differs from the promise the skill is tested
 against, so the table cannot drift away from tested behavior.
+
+## Scope
+
+All implementation and documentation here were independently written. There is no
+imported code, generated skill text, build toolchain, browser component or usage
+telemetry.
