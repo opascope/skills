@@ -105,6 +105,27 @@ def insider_hits(text):
     return found
 
 
+def parallel_runs(text):
+    """Three sentences opening the same way is a rhythm a person does not write.
+
+    This is the tell that reads as machine-written even when every word is plain:
+    "It does not wake. It does not retry. It does not handle." The writing-guidance
+    detectors miss it, because each sentence on its own is unremarkable.
+    """
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    opener = lambda s, n: ' '.join(re.findall(r"[A-Za-z][A-Za-z'-]*", s)[:n]).lower()
+    found, run = [], []
+    for sentence in sentences + ['']:
+        two = opener(sentence, 2)
+        if run and two and two == opener(run[-1], 2):
+            run.append(sentence)
+            continue
+        if len(run) >= 3:
+            found.append((opener(run[0], 2), len(run)))
+        run = [sentence] if sentence else []
+    return found
+
+
 def outside_mentions(text):
     return [name for name in NO_MENTION
             if re.search(r'(?<![\w-])' + re.escape(name) + r'(?![\w-])', text, re.I)]
@@ -126,6 +147,11 @@ def check():
     for word, hits in insider_hits(readme_prose).items():
         fail(findings, 'README.md', f'trade term "{word}" appears {hits} time(s)',
              f'say "{INSIDER[word]}"')
+
+    for opener, count in parallel_runs(readme_prose):
+        fail(findings, 'README.md',
+             f'{count} sentences in a row open with "{opener}"',
+             'vary the opening, or join them into one sentence')
 
     score = readability(readme_prose)
     if score and score['grade'] > GRADE_CEILING:

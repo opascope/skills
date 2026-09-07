@@ -28,7 +28,7 @@ Useful agent workflows often have nothing to do with your domain.
 
 You need Git, Python 3.9 or newer, and a logged-in Claude Code or Codex CLI. It works on macOS, Linux, and WSL.
 
-You do not need pip. You do not need a JavaScript runtime. You do not need to build anything.
+Nothing to install with pip, no JavaScript runtime, and no build step.
 
 Run this command:
 
@@ -73,7 +73,7 @@ Skill names start with `opascope-`. To choose, use `opascope`. The same files se
 
 **`opascope-interrogate`** drafts the plan it is about to execute. It labels every claim SAID (you supplied it), FOUND (verified, with source), or GUESSED (an assumption). A plausible inference still counts as GUESSED. It resolves what the environment can answer before involving you. It asks at most three independent questions per round. Scope-changing ones come first.
 
-Zero questions is a valid result. It will not manufacture uncertainty to look thorough.
+Zero questions is a valid result, and it will not invent uncertainty to look thorough.
 
 ### How do I define "done" for an AI coding task?
 
@@ -86,7 +86,7 @@ Zero questions is a valid result. It will not manufacture uncertainty to look th
 
 **`opascope-planning`** gives each step one action, its dependencies, a check that passes or fails, and a place to find proof. A step without a check is an assumption about success.
 
-Where an independent reviewer is available it uses one. Where none exists it runs three sequential passes: feasibility, coverage, scope. It labels the result "sequential self-review, not independent". It never implies review it did not perform.
+Where an independent reviewer is available it uses one. Where none exists it runs three sequential passes: feasibility, coverage, scope. It labels the result "sequential self-review, not independent".
 
 ### How do I hand off context between agent sessions?
 
@@ -185,23 +185,21 @@ Use a mega-collection for domain capability. Use this alongside it for the decis
 - Claude Code or Codex CLI, installed and authenticated
 - macOS, Linux, or WSL
 
-No Python packages. No JavaScript runtime. No build step. No database. No daemon. No telemetry.
+It needs no Python packages, no JavaScript runtime, no build step, no database, no background service, and no telemetry.
 
 ## Limitations
 
-Stated plainly, because the whole package is about not overclaiming.
+Sealing catches accidental edits to your criteria, and requirements that went missing. It will not stop malicious code that already holds your filesystem permissions.
 
-Criterion sealing is not a sandbox. Fingerprinting detects accidental changes to criteria and removed requirements. It cannot defend against malicious code that holds the same filesystem permissions.
+Proofs run with your privileges, outside the agent sandbox. Read a contract's proof commands before you run it, the same way you would read any script.
 
-Loop proofs run with your privileges, outside the agent sandbox. Review proof commands as executable code before you run a contract.
+You start every run yourself. Nothing wakes on a schedule, retries after a crash, watches your usage allowance, or runs in the background.
 
-The launcher is not a scheduler. It does not wake automatically. It does not retry after exit. It does not handle your usage allowance. It does not run a background daemon.
+A model can still misjudge. During release testing a Codex worker read an escaped display of its own proof as a literal backslash and stopped. The decoded bytes showed it was wrong.
 
-A model can still misjudge. During release verification a Codex worker read an escaped display of its own proof as a literal backslash and stopped. Inspecting the decoded byte values disproved the claim. This is a real limit of model judgment. It is not a reason to soften a proof.
+Usage counts only the skills you invoked by name, so it undercounts. A skill the agent chose on its own leaves nothing to count.
 
-Usage measurement deliberately undercounts. It counts explicit by-name invocations only. It misses skills selected from their description.
-
-Sequential self-review is not independent review. The package labels which one occurred. It never silently substitutes.
+When no independent reviewer is available, a skill reviews its own work and the output says so.
 
 ## How can I tell the skills do what they say?
 
@@ -255,7 +253,7 @@ It exits with a distinct status for blocker, iteration cap, timeout, or three ca
 python3 -m unittest discover -s tests -v
 ```
 
-Tests cover both runtime discovery layouts and identical linked skill contents. They cover safety when run twice, real-directory and symlink collisions, and preservation of user additions. They cover partial-install rollback, uninstall, and file resolution. They cover immutable handoffs, transcript parsing, actual proof execution, and safe Git updates.
+Tests cover both runtime discovery layouts, identical linked skill contents, safety when run twice, real-directory and symlink collisions, preservation of user additions, partial-install rollback, uninstall, file resolution, immutable handoffs, transcript parsing, actual proof execution, and safe Git updates.
 
 Opt-in live checks against your own authenticated runtimes are in [docs/verification.md](docs/verification.md). Loop contracts and their limits are in [docs/loops.md](docs/loops.md). File semantics are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
