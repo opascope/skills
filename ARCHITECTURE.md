@@ -121,9 +121,8 @@ agent reads them; frontmatter descriptions are reported as warnings. The gate al
 fails when a README table sentence differs from the promise the skill is tested
 against, so the table cannot drift away from tested behavior.
 
-## Packaging reference
+## Scope
 
-The flat link projection, interactive setup, visible versions and router were
-informed by studying [gstack](https://github.com/garrytan/gstack). All implementation
-and documentation here were independently written. There is no imported code,
-generated skill text, build toolchain, browser component or usage telemetry.
+All implementation and documentation here were independently written. There is no
+imported code, generated skill text, build toolchain, browser component or usage
+telemetry.
