@@ -134,7 +134,7 @@ Checking against the real agents needs your own logged-in CLI. See `docs/verific
 
 `plainlang.py` is the gate on this file and on every skill name. It checks your wording. A contributor should know their wording will be checked.
 
-## License and credit
+## License and contributing
 
 MIT licensed, copyright Opascope.
 
