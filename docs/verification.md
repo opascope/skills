@@ -74,24 +74,16 @@ claim. The correction was recorded in the checkpoint, the blocker cleared, and
 the same sealed criteria resumed successfully. This is a real limitation of
 model judgment, not a reason to soften the proof or equate a blocker with done.
 
-The first nested toy-project test also inherited its parent project's artifact
-root. Moving the harness to standalone temporary projects corrected the test
-boundary. Additional fresh-clone handoff runs exercised both runtimes with the
-final root and preservation instructions.
-
-The usage command was run against actual local transcripts in addition to
-fixtures. That exposed built-in command false positives, which were corrected
-with catalogue matching and regression tests. No personal rankings or raw
-transcripts are published.
+The usage command was run against real local transcripts as well as fixtures.
+No personal rankings or raw transcripts are published.
 
 ## Publication checks
 
 All shippable paths were swept for private identifiers, paths, configuration
-names and sensitive figures, with a separate proper-noun/path review. No such
-findings remained. Runtime logs, machine-specific receipts and toy artifacts
-are excluded from the Git tree. Source-specific examples, integration calls
-and historical ledgers were not included in the package.
+names and sensitive figures, with a separate proper-noun and path review. No
+such findings remained. Runtime logs, machine-specific receipts and toy files
+are kept out of the Git tree, as is anything specific to the project this was
+extracted from.
 
-All implementation and prose in this package were written independently. A
-whole-file hash sweep across 677 outside reference files found no verbatim
-matches. The license is the standard MIT text with Opascope copyright.
+All implementation and prose in this package were written independently. The
+license is the standard MIT text with Opascope copyright.

@@ -220,12 +220,11 @@ class PlainLanguageTests(unittest.TestCase):
         ours = 'git clone https://github.com/opascope/skills.git'
         self.assertEqual(plainlang.outside_links(ours), [])
 
-    def test_every_skill_is_listed_in_the_readme(self):
-        table = set((ROOT / 'README.md').read_text().split())
-        for path in (ROOT / 'skills').iterdir():
-            if path.name != 'opascope' and (path / 'SKILL.md').is_file():
-                with self.subTest(path.name):
-                    self.assertIn(path.name[len('opascope-'):], ' '.join(table))
+    # A test that split the README into words and substring-matched each skill
+    # name lived here. It passed on any occurrence anywhere, including inside a
+    # longer word, so it proved nothing the gate does not already prove properly.
+    # plainlang's "name is missing from the README table" check is the real one,
+    # and test_reader_facing_words_pass_the_gate above runs it.
 
 
 if __name__ == '__main__':

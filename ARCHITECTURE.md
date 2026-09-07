@@ -109,9 +109,13 @@ fail. Each contract also carries the fixture request that produces the result.
 no adversarial check, one whose fixture plants something the skill is supposed to
 refuse and which fails if the skill did it anyway. `tests/live_runtime.py`
 discovers cases from the contracts, runs each against a real CLI, and evaluates
-the checks against the produced artifacts, the tool trace and the project tree.
+the checks against the produced artifacts, the run's final answer and the project
+tree. The full tool trace is kept beside the result but never scored: it echoes
+the skill's own instructions, so a check reading it would pass on every run.
 `tests/test_gates.py` runs a fabricated artifact that breaks every promise through
-every contract, so a check that cannot fail is itself a test failure.
+every contract and requires every adversarial check to trip, so an adversarial
+check that cannot fail is itself a test failure. It also replays the wrong-looking
+outputs that once slipped past, each named with the check that has to catch it.
 
 `plainlang.py` gates the words a reader sees: skill names, the README and each
 promise sentence. It fails on a listed trade term, a Flesch-Kincaid grade above 8,

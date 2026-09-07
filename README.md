@@ -2,7 +2,7 @@
 
 The decisions around the work, made explicit. One install, both runtimes.
 
-[![Tests](https://img.shields.io/badge/tests-55%20passing-brightgreen)](docs/verification.md)
+[![Tests](https://img.shields.io/badge/tests-54%20passing-brightgreen)](docs/verification.md)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Runtimes](https://img.shields.io/badge/runtimes-Claude%20Code%20%7C%20Codex%20CLI-blueviolet)](#which-runtimes-are-supported)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)](#requirements)
@@ -68,6 +68,7 @@ Skill names start with `opascope-`. To choose, use `opascope`. The same files se
 | `session-handoff` | Leaves the next session the exact next step and proof of what is already done. |
 | `optimize` | Says what to delete, argues the other side first, and changes nothing. |
 | `loop-builder` | Sets up a long unattended run with a real finish line and a spending limit. |
+| `opascope` | Names the one skill to use, and runs it only when you asked for the work. |
 
 ### How do I stop an agent from guessing at requirements?
 
@@ -174,7 +175,7 @@ It does not edit your shell profile or your agent config. It installs nothing th
 | Dependencies | Varies, often npm or Python packages | None. Markdown and Python standard library |
 | Completion checking | The agent reports done | The parent process runs proofs independently |
 | Install | Copy files or add a marketplace | Symlinks with a record, reversible uninstall |
-| Tests | Usually none | 55 standard-library tests |
+| Tests | Usually none | 54 standard-library tests |
 
 Use a mega-collection for domain capability. Use this alongside it for the decisions around the work.
 
@@ -203,7 +204,7 @@ When no independent reviewer is available, a skill reviews its own work and the 
 
 ## How can I tell the skills do what they say?
 
-Every skill carries a promise file next to it. The promise uses the same words as the table above.
+Every skill carries a promise file next to it. The promise uses the same words as the promise table above.
 
 Next to the promise sit the checks that would catch the skill breaking it. At least one check is a trap. It sets up something the skill should refuse, and fails if the skill does it anyway.
 
@@ -245,7 +246,7 @@ No. It sends no telemetry and runs no background update process. The usage comma
 It exits with a distinct status for blocker, iteration cap, timeout, or three calls without measurable progress. It preserves every file. None of those is reported as success. A later explicit run resumes from the files, even on the other runtime.
 
 **How do I know it actually works?**
-`python3 -m unittest discover -s tests -v` runs 55 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
+`python3 -m unittest discover -s tests -v` runs 54 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
 
 ## Verification
 

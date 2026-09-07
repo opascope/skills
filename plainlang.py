@@ -225,12 +225,12 @@ def check():
             continue
     for skill in skills():
         name = skill.name
-        if name == 'opascope':
-            continue
-        if not name.startswith('opascope-'):
+        # The router used to be exempt here, which is how its promise sentence
+        # came to say the opposite of what it does without anything noticing.
+        if name != 'opascope' and not name.startswith('opascope-'):
             fail(findings, name, 'skill directory is missing the opascope- prefix')
             continue
-        bare = name[len('opascope-'):]
+        bare = name[len('opascope-'):] if name.startswith('opascope-') else name
         parts = bare.split('-')
         if not NAME_TOKENS[0] <= len(parts) <= NAME_TOKENS[1]:
             fail(findings, name, f'name has {len(parts)} words, keep it to '
