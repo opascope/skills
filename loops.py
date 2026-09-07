@@ -45,7 +45,7 @@ def contract(task):
 
 def fingerprint(task, data):
     paths = [task / name for name in IMMUTABLE]
-    project = Path(json.loads((task / 'task.json').read_text())['project'])
+    project = (task / json.loads((task / 'task.json').read_text())['project']).resolve()
     paths += [project / p for p in data.get('verifier_files', [])]
     values = {}
     for path in paths:
@@ -98,7 +98,7 @@ def run(task, runtime, steps, seconds):
     expected = json.loads((task / 'seal.json').read_text())
     if fingerprint(task, data) != expected:
         raise ValueError('Criteria differ from the seal; no runtime started')
-    base = Path(json.loads((task / 'task.json').read_text())['project'])
+    base = (task / json.loads((task / 'task.json').read_text())['project']).resolve()
     lock = task / 'run.lock'
     try:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -155,6 +155,9 @@ def run(task, runtime, steps, seconds):
                 print('PAUSED: no measurable progress in three calls.')
                 return 3
             prompt = (
+                'Execute the prepared loop now within its defined scope. This invocation is the '
+                'separate execution request following any build-only preparation; all other '
+                'constraints still apply. '
                 f'Work only on the authorized task in {task}. Read the project instructions, then '
                 f'{task}/init.md, CONTEXT.md, SAFETY.md, loop.json, CHECKLIST.md, NOTES.md, BLOCKERS.md '
                 'from that task directory. Resume the checkpoint and make one bounded increment. '

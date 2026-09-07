@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -45,12 +46,13 @@ def artifact_root(path, create=False):
     if root.exists():
         if not marker.is_file() or marker.is_symlink():
             raise ValueError(f'Unowned artifact directory: {root}')
-        if json.loads(marker.read_text()).get('project') != str(base):
+        owner = json.loads(marker.read_text()).get('project')
+        if not isinstance(owner, str) or (root / owner).resolve() != base:
             raise ValueError('Artifact directory belongs to another project; choose a unique artifact_dir')
     elif create:
         root.mkdir(parents=True)
         with marker.open('x') as stream:
-            json.dump({'project': str(base), 'schema': 1}, stream)
+            json.dump({'project': os.path.relpath(base, root), 'schema': 1}, stream)
     return base, root
 
 
@@ -59,7 +61,7 @@ def new_task(path, title):
     slug = re.sub('[^a-z0-9]+', '-', title.lower()).strip('-')[:48] or 'task'
     task = root / (slug + '-' + uuid.uuid4().hex[:10])
     task.mkdir()
-    (task / 'task.json').write_text(json.dumps({'title': title, 'created': timestamp(), 'project': str(base)}, indent=2) + '\n')
+    (task / 'task.json').write_text(json.dumps({'title': title, 'created': timestamp(), 'project': os.path.relpath(base, task)}, indent=2) + '\n')
     return task
 
 
@@ -179,6 +181,7 @@ def main(argv=None):
     p = sub.add_parser('usage')
     p.add_argument('paths', type=Path, nargs='*')
     p.add_argument('--json', action='store_true')
+    p.add_argument('--skill', action='append', default=[], help='Also recognize this historical skill name; repeat as needed')
     p = sub.add_parser('loop')
     p.add_argument('args', nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
@@ -201,7 +204,7 @@ def main(argv=None):
         update(args.check, args.offline, args.base)
     elif args.command == 'usage':
         import measurement
-        measurement.report(args.paths, args.json)
+        measurement.report(args.paths, args.json, args.skill)
     elif args.command == 'loop':
         import loops
         return loops.main(args.args)

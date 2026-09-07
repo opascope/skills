@@ -22,14 +22,22 @@ Recognized invocation evidence:
 Only user-message text and explicit Skill calls are examined. Ordinary
 assistant narration, tool results, injected instruction catalogues, fenced
 code and inline code are excluded. Short and hyphenated names both count.
-Common built-in commands (such as help, model and resume) are excluded from
-plain-text tokens; a structured Skill call still counts an identically named
-skill. Full paths and filenames do not count as invocation tokens.
+User tokens and command markup are matched against names in the installed
+home/project skill entrypoints and this package. This excludes unknown slash
+commands and path-like prose. Historical structured Skill calls also count
+without a current install, except known built-in commands unless a skill with
+that name is installed. Full paths and filenames are not invocation tokens.
+
+For a retired skill that is no longer installed, add `--skill old-skill-name`;
+repeat the option for more names. This adds names to the catalogue, not a
+filter on the final ranking. Only entrypoint frontmatter is read to build the
+catalogue. Linked repositories are not recursively scanned.
 
 This is a deliberately narrow measurement. Natural-language mentions without
 an invocation token, skills selected by description, and Codex file reads
 that do not have a preceding explicit user invocation are not counted.
-Transcript formats can evolve. A user discussing a slash command in unquoted
+Historical user invocations without an installed or explicitly supplied name
+are also missed. Transcript formats can evolve. A user discussing a slash command in unquoted
 prose can be a false positive; put it in code formatting to exclude it.
 The command reports recognized evidence, not a definitive audit of all use.
 

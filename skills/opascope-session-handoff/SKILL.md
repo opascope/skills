@@ -19,6 +19,8 @@ artifact is the pickup contract; no runtime-specific state capture is needed.
    previous handoff and artifacts. Cross-check conversation claims against the
    current files, command results, and git status/diff when this is a git project.
    In a non-git folder, inspect the relevant files and their actual contents.
+   A directory listing proves existence, not unchanged content. Use content or
+   hash comparison for preservation claims; state when no baseline is available.
 2. Distinguish verified work, unverified recollections and unrelated existing
    changes. Never claim every dirty file belongs to this session. If compaction
    erased the rationale, say which facts were recovered from disk and what the
