@@ -98,11 +98,15 @@ def measure(paths, names=None):
                     except (ValueError, TypeError):
                         invalid += 1
                         continue
-                    if isinstance(record.get('sessionId'), str):
-                        identity = 'claude:' + record['sessionId']
-                    if record.get('type') == 'session_meta' and isinstance(record.get('payload', {}).get('id'), str):
-                        identity = 'codex:' + record['payload']['id']
-                    hits = invocations(record, known)
+                    try:
+                        if isinstance(record.get('sessionId'), str):
+                            identity = 'claude:' + record['sessionId']
+                        if record.get('type') == 'session_meta' and isinstance(record.get('payload', {}).get('id'), str):
+                            identity = 'codex:' + record['payload']['id']
+                        hits = invocations(record, known)
+                    except (AttributeError, TypeError, KeyError):
+                        invalid += 1
+                        continue
                     recognized += bool(hits)
                     names.update(hits)
         except OSError:
