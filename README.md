@@ -272,6 +272,6 @@ No published claim here depends on this metric. Run it on your own transcripts t
 
 ## About
 
-Built and used by [Opascope](https://opascope.com), a digital marketing agency that runs its own delivery on coding agents. These are the work habits we needed often enough to package, with the domain specifics stripped out.
+Built and used by [Opascope](https://opascope.com), a performance marketing agency that runs its own delivery on coding agents. These are the work habits we needed often enough to package, with the domain specifics stripped out.
 
 MIT licensed. Contributions keep the package small and the files readable on their own. They keep the install free of anything you must install first.
