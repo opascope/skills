@@ -44,7 +44,7 @@ Verified on Linux on 2026-09-07 with Claude Code 2.1.263 and Codex CLI 0.153.4.
 macOS and WSL are supported by the implementation but were not exercised on
 separate machines in this pass.
 
-- 34 standard-library automated tests passed.
+- 35 standard-library automated tests passed.
 - A fresh remote clone completed the interactive installer in a real terminal,
   installed both runtime layouts, and passed rerun/idempotency checks. Uninstall
   restored the empty installation base exactly. Existing-file preservation and
