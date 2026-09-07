@@ -187,6 +187,57 @@ class PromiseContractTests(unittest.TestCase):
                 self.assertIn(check_id, [r['id'] for r in results if not r['passed']],
                               f'{check_id} let this through:\n{artifact}')
 
+    # One compliant output per contract, as (artifact, output). Every check must
+    # pass on all of these. Four separate patterns were caught failing correct work
+    # before this existed; a contract with no positive fixture is a contract nobody
+    # has proved is safe to run against real output.
+    KEEPS = {
+        'opascope-define-done': (
+            'This is solved when a reader can find each note by topic and every '
+            'original note is preserved byte for byte.\n', ''),
+        'opascope-interrogate': (
+            'Brief\n- SAID: the output is index.md\n- FOUND: two notes exist\n'
+            '- GUESSED: one entry per note\n', ''),
+        'opascope-planning': (
+            '### 1. Read both notes\nDo: read notes/alpha.txt and notes/beta.txt\n'
+            'Verify: both files open and their topic lines are readable\n'
+            'Status: pending\n\n'
+            '### 2. Write the index\nDo: write index.md with one link per note\n'
+            'Verify: index.md lists each note exactly once\nStatus: pending\n\n'
+            'Mode: sequential self-review, not independent\n', ''),
+        'opascope-session-handoff': (
+            'Current state: not started\n'
+            '## In flight and next action\nInspect both notes, then plan the index.\n'
+            '## Read first\nnotes/alpha.txt\n'
+            'No topic index has been created.\n', ''),
+        'opascope-optimize': (
+            '| Component | Verdict | Evidence |\n'
+            'KILL duplicated-index.txt: it lists notes/alpha.txt twice.\n'
+            'Case for keeping: another tool might read it as a manifest. It does not '
+            'survive: nothing in the project opens it.\n'
+            'KEEP notes/alpha.txt: the note itself.\n'
+            'KEEP notes/beta.txt: the note itself.\n', ''),
+        'opascope-loop-builder': (
+            '{"schema": 1, "items": [{"id": "greet", "proof": ["sh", "-c", '
+            '"test -f greeting.txt"]}], "final_proof": ["sh", "-c", '
+            '"grep -qx hello greeting.txt"]}\n', ''),
+        'opascope': (
+            '', 'Use opascope-define-done. It writes the one sentence you asked for.'),
+    }
+
+    def test_every_contract_passes_its_own_compliant_output(self):
+        missing = sorted(set(promise.contracts()) - set(self.KEEPS))
+        self.assertEqual(missing, [], 'a contract with no compliant fixture is one '
+                                      'nobody has shown is safe to run against real output')
+        for name in sorted(promise.contracts()):
+            artifact, output = self.KEEPS[name]
+            with self.subTest(name):
+                results = promise.evaluate(promise.contracts()[name], artifact=artifact,
+                                           output=output, project=Path(tempfile.mkdtemp()))
+                self.assertEqual(
+                    [(r['id'], r['detail']) for r in results if not r['passed']], [],
+                    f'{name} failed output that keeps its promise')
+
     def test_checks_pass_on_work_that_keeps_it(self):
         good = ('This is solved when a reader can find each note by topic and every '
                 'original note is preserved byte for byte.\n')

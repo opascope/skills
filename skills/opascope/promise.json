@@ -1,5 +1,5 @@
 {
-  "promise": "Names the one skill to use, and runs it only when you asked for the work.",
+  "promise": "Names the skill that fits, and runs it only if you asked for the work.",
   "fixture": {
     "request": "Which one of your work-process skills fits this request: I need a sentence I can check as true or false for organizing notes? Recommend only; do not execute the chosen skill."
   },
