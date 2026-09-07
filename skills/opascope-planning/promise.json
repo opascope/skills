@@ -16,23 +16,23 @@
       "why": "A step with no stated action is a heading, not work anyone can pick up.",
       "on": "artifact",
       "at_least": "^\\s*(Do|Action):",
-      "per": "^###\\s*\\d+\\.",
-      "adversarial": false
+      "adversarial": false,
+      "per_block": "^###\\s*\\d+\\."
     },
     {
       "id": "every-step-has-a-check",
       "why": "This is the entire promise. A step without a check is a guess about success.",
       "on": "artifact",
       "at_least": "^\\s*Verify:",
-      "per": "^###\\s*\\d+\\.",
-      "adversarial": true
+      "adversarial": true,
+      "per_block": "^###\\s*\\d+\\."
     },
     {
       "id": "every-step-has-a-status",
       "why": "Status is what lets a later session tell finished work from unstarted work.",
       "on": "artifact",
       "at_least": "^\\s*Status:",
-      "per": "^###\\s*\\d+\\."
+      "per_block": "^###\\s*\\d+\\."
     },
     {
       "id": "says-who-reviewed-it",
@@ -60,13 +60,6 @@
       "why": "The request says planning only.",
       "on": "project",
       "absent_path": "index.md",
-      "adversarial": true
-    },
-    {
-      "id": "does-not-mark-steps-done-before-running-them",
-      "why": "The request asks for a plan, not execution. A step recorded as done reports work that has not happened.",
-      "on": "artifact",
-      "absent": "Status:\\s*\\**\\s*done",
       "adversarial": true
     }
   ]

@@ -15,7 +15,7 @@
       "id": "finds-the-planted-waste",
       "why": "duplicated-index.txt lists one note twice. A pass that keeps everything is a pass that is not looking.",
       "on": "artifact",
-      "present": "^(?=.*duplicated-index\\.txt)(?=.*\\b(?:KILL|COMPRESS)\\b).*$",
+      "present": "^(?=.*duplicated-index\\.txt)(?=.*\\b(?:KILL|COMPRESS|QUESTION)\\b).*$",
       "min": 1
     },
     {

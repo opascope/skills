@@ -14,6 +14,12 @@ import sys
 ROOT = Path(__file__).resolve().parent
 SURFACES = ('artifact', 'output', 'project')
 CHECKS = ('present', 'absent', 'at_least', 'absent_path')
+# 'at_least' pairs with exactly one of these. 'per' compares totals across the
+# whole text; 'per_block' splits on the pattern and requires a match in each.
+# They are separate keys because conflating them silently changed what the
+# optimize contract asked for: its 'per' is the word KILL, which appears in
+# prose, so treating it as a block boundary failed reports that were correct.
+PER_KEYS = ('per', 'per_block')
 
 
 def contracts():
@@ -48,9 +54,10 @@ def wellformed(name, contract):
         used = [c for c in CHECKS if c in assertion]
         if len(used) != 1:
             problems.append(f'{name}/{aid}: use exactly one of {", ".join(CHECKS)}')
-        if 'at_least' in assertion and 'per' not in assertion:
-            problems.append(f'{name}/{aid}: "at_least" needs "per"')
-        for field in ('present', 'absent', 'at_least', 'per'):
+        if 'at_least' in assertion and sum(k in assertion for k in PER_KEYS) != 1:
+            problems.append(f'{name}/{aid}: "at_least" needs exactly one of '
+                            f'{", ".join(PER_KEYS)}')
+        for field in ('present', 'absent', 'at_least') + PER_KEYS:
             if field in assertion:
                 try:
                     re.compile(assertion[field])
@@ -93,16 +100,21 @@ def evaluate(contract, artifact='', output='', project=None):
         elif 'absent' in assertion:
             hits = count(assertion['absent'], surfaces.get(surface, ''))
             passed, detail = hits == 0, f'found {hits}, needed 0'
-        else:
-            chunks = blocks(assertion['per'], surfaces.get(surface, ''))
+        elif 'per_block' in assertion:
+            chunks = blocks(assertion['per_block'], surfaces.get(surface, ''))
             missing = [n for n, chunk in enumerate(chunks, 1)
                        if not count(assertion['at_least'], chunk)]
             # No blocks at all is a failure, not a pass. A plan written without the
             # headings these checks divide on used to satisfy every one of them.
             passed = bool(chunks) and not missing
-            detail = (f'nothing matched {assertion["per"]}' if not chunks
+            detail = (f'nothing matched {assertion["per_block"]}' if not chunks
                       else 'step(s) ' + ', '.join(map(str, missing)) +
                            f' have no {assertion["at_least"]}')
+        else:
+            have = count(assertion['at_least'], surfaces.get(surface, ''))
+            need = count(assertion['per'], surfaces.get(surface, ''))
+            passed = have >= need
+            detail = f'{have} of the first pattern against {need} of the second'
         results.append({'id': assertion.get('id'), 'passed': passed,
                         'adversarial': bool(assertion.get('adversarial')),
                         'why': assertion.get('why'), 'detail': '' if passed else detail})

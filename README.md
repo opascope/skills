@@ -190,6 +190,8 @@ It needs no Python packages, no JavaScript runtime, no build step, no database, 
 
 ## Limitations
 
+The checks read the shape of what a skill wrote, not its meaning. They catch a broken promise written the way we have seen one written. A wrong answer phrased in a way we have not seen can still pass, and the package ships the outputs that once did.
+
 Sealing catches accidental edits to your criteria, and requirements that went missing. It will not stop malicious code that already holds your filesystem permissions.
 
 Proofs run with your privileges, outside the agent sandbox. Read a contract's proof commands before you run it, the same way you would read any script.

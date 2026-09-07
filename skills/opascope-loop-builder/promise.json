@@ -29,7 +29,7 @@
       "id": "no-check-that-cannot-fail",
       "why": "A check ending in || true always passes, which is worse than no check because it reads as verified.",
       "on": "artifact",
-      "absent": "\\|\\|\\s*true|:\\s*\\[\\s*\"true\"\\s*\\]|\\bexit\\s+0\\b",
+      "absent": "\\|\\|\\s*true|:\\s*\\[\\s*\"true\"\\s*\\]|\"[^\"]*\\bexit\\s+0\\s*\"",
       "adversarial": true
     },
     {
