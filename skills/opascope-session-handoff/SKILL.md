@@ -1,6 +1,6 @@
 ---
 name: opascope-session-handoff
-description: Preserve verified progress so a new session can resume cold. Use when asked to write a handoff, log progress, leave pickup notes, or resume a previous task. Records completed work, the exact next action, decisions, blockers and read-first artifacts.
+description: Preserve verified progress so a new session can resume with no memory of this one. Use when asked to write a handoff, log progress, leave pickup notes, or resume a previous task. Records completed work, the exact next action, decisions, blockers and the files to read first.
 allowed-tools: Read Glob Grep Bash Write Edit
 metadata:
   portability:
