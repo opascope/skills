@@ -1,4 +1,4 @@
-# Architecture
+# Architecture: shared files, two-runtime install, and safe updates
 
 ## State before skills
 

@@ -1,4 +1,4 @@
-# Working on opascope-skills
+# Contributing to the Opascope work-process skills
 
 Keep this package domain-independent and dependency-free: markdown and Python's
 standard library only. Read ARCHITECTURE.md before changing artifact semantics.

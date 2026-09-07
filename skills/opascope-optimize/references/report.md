@@ -1,4 +1,4 @@
-# Optimization report
+# Optimization report format
 
 State the target, inspected scope, unavailable evidence and review mode.
 

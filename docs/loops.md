@@ -1,4 +1,4 @@
-# Running a prepared loop
+# Running an unattended Claude Code or Codex loop with real proofs
 
 The loop-builder skill writes the contract described in its
 [reference](../skills/opascope-loop-builder/references/contract.md). A loop task
