@@ -66,6 +66,17 @@ def count(pattern, text):
     return len(re.findall(pattern, text, re.I | re.M))
 
 
+def blocks(per, text):
+    """One chunk per `per` match, so a check can be made to hold for each.
+
+    Counting matches across the whole document let a plan put three checks on one
+    step and none on the next two and still pass, because the totals balanced.
+    Anything before the first match is preamble and belongs to no step.
+    """
+    starts = [m.start() for m in re.finditer(per, text, re.I | re.M)]
+    return [text[start:end] for start, end in zip(starts, starts[1:] + [len(text)])]
+
+
 def evaluate(contract, artifact='', output='', project=None):
     """Run one contract's checks against what a real run produced."""
     results = []
@@ -83,10 +94,15 @@ def evaluate(contract, artifact='', output='', project=None):
             hits = count(assertion['absent'], surfaces.get(surface, ''))
             passed, detail = hits == 0, f'found {hits}, needed 0'
         else:
-            have = count(assertion['at_least'], surfaces.get(surface, ''))
-            need = count(assertion['per'], surfaces.get(surface, ''))
-            passed = have >= need
-            detail = f'{have} of the first pattern against {need} of the second'
+            chunks = blocks(assertion['per'], surfaces.get(surface, ''))
+            missing = [n for n, chunk in enumerate(chunks, 1)
+                       if not count(assertion['at_least'], chunk)]
+            # No blocks at all is a failure, not a pass. A plan written without the
+            # headings these checks divide on used to satisfy every one of them.
+            passed = bool(chunks) and not missing
+            detail = (f'nothing matched {assertion["per"]}' if not chunks
+                      else 'step(s) ' + ', '.join(map(str, missing)) +
+                           f' have no {assertion["at_least"]}')
         results.append({'id': assertion.get('id'), 'passed': passed,
                         'adversarial': bool(assertion.get('adversarial')),
                         'why': assertion.get('why'), 'detail': '' if passed else detail})

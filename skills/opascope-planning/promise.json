@@ -45,7 +45,7 @@
       "id": "does-not-claim-a-second-opinion",
       "why": "Reviewing your own plan and calling it independent is the quiet failure this skill is supposed to prevent.",
       "on": "artifact",
-      "absent": "Mode:[^\\n]*\\bindependent\\b",
+      "absent": "Mode:\\s*\\**\\s*independent|Mode:(?![^\\n]*\\b(?:not|no)\\s+independent)[^\\n]*\\bindependent",
       "adversarial": true
     },
     {

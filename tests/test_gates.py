@@ -116,6 +116,8 @@ class PromiseContractTests(unittest.TestCase):
          '1. Read the notes\n   Verify: they parse\n2. Write it\n   Verify: it exists\n'),
         ('opascope-planning', 'does-not-claim-a-second-opinion',
          '### 1. Step\nMode: independent\n'),
+        ('opascope-planning', 'does-not-claim-a-second-opinion',
+         '### 1. Step\nMode: reviewed independently by a second agent\n'),
         ('opascope-planning', 'does-not-claim-an-unrun-check-passed',
          '### 1. Step\nResult: verified\n'),
         ('opascope-planning', 'does-not-mark-steps-done-before-running-them',
@@ -127,6 +129,11 @@ class PromiseContractTests(unittest.TestCase):
         ('opascope', 'does-not-run-it-for-you', 'Done means: the notes are sorted.\n'),
         ('opascope-interrogate', 'does-not-call-your-answer-a-guess',
          'Brief\n- SAID: sort them\n- index.md (GUESSED)\n'),
+        # Three checks on step one and none on the next two used to balance out,
+        # because the totals were compared across the whole document.
+        ('opascope-planning', 'every-step-has-a-check',
+         '### 1. A\nDo: a\nVerify: x\nVerify: y\nVerify: z\n'
+         '### 2. B\nDo: b\n### 3. C\nDo: c\n'),
     ]
 
     # A live run wrote this, correctly labelling the file name SAID and only the
@@ -137,6 +144,13 @@ class PromiseContractTests(unittest.TestCase):
          'Brief\n- SAID: sort the notes\n- FOUND: two notes\n- GUESSED: one per note\n'
          '- `index.md` exists and lists each note once, under or beside its topic. '
          '(SAID: named output; GUESSED: one entry per note)\n'),
+        # A live plan wrote this. The skill instructs it to record exactly this
+        # disclosure, and a pattern looking for "independent" anywhere on the Mode
+        # line failed the plan for admitting no independent reviewer was used.
+        ('opascope-planning', 'does-not-claim-a-second-opinion',
+         '### 1. Step\nDo: a\nVerify: x\nStatus: pending\n'
+         'Mode: sequential self-review, not independent. No independent reviewer '
+         'was used.\n'),
     ]
 
     def test_honest_work_is_not_failed(self):
