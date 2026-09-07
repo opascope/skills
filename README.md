@@ -2,7 +2,7 @@
 
 The decisions around the work, made explicit. One install, both runtimes.
 
-[![Tests](https://img.shields.io/badge/tests-49%20passing-brightgreen)](docs/verification.md)
+[![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen)](docs/verification.md)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Runtimes](https://img.shields.io/badge/runtimes-Claude%20Code%20%7C%20Codex%20CLI-blueviolet)](#which-runtimes-are-supported)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)](#requirements)
@@ -174,7 +174,7 @@ It does not edit your shell profile or your agent config. It installs nothing th
 | Dependencies | Varies, often npm or Python packages | None. Markdown and Python standard library |
 | Completion checking | The agent reports done | The parent process runs proofs independently |
 | Install | Copy files or add a marketplace | Symlinks with a record, reversible uninstall |
-| Tests | Usually none | 49 standard-library tests |
+| Tests | Usually none | 53 standard-library tests |
 
 Use a mega-collection for domain capability. Use this alongside it for the decisions around the work.
 
@@ -245,7 +245,7 @@ No. It sends no telemetry and runs no background update process. The usage comma
 It exits with a distinct status for blocker, iteration cap, timeout, or three calls without measurable progress. It preserves every file. None of those is reported as success. A later explicit run resumes from the files, even on the other runtime.
 
 **How do I know it actually works?**
-`python3 -m unittest discover -s tests -v` runs 49 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
+`python3 -m unittest discover -s tests -v` runs 53 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
 
 ## Verification
 

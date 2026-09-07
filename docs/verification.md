@@ -49,7 +49,7 @@ separate machines in this pass.
   installed both runtime layouts, and passed rerun/idempotency checks. Uninstall
   restored the empty installation base exactly. Existing-file preservation and
   partial failure rollback were separately tested.
-- All six skills plus the router completed real calls in both runtimes. Each
+- Every skill plus the router completed real calls in both runtimes. Each
   skill was invoked by its installed name; tool traces and resulting artifacts
   were inspected, not just frontmatter.
 
