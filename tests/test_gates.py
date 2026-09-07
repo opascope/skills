@@ -126,6 +126,15 @@ class PlainLanguageTests(unittest.TestCase):
         pair = 'It does not wake. It does not retry. Something else entirely.'
         self.assertEqual(plainlang.parallel_runs(pair), [])
 
+    def test_readme_test_count_matches_reality(self):
+        self.assertEqual(plainlang.claimed_test_counts((ROOT / 'README.md').read_text()),
+                         {plainlang.test_count()})
+
+    def test_gate_catches_a_stale_test_count(self):
+        stale = 'runs 3 standard-library tests in temporary directories'
+        self.assertEqual(plainlang.claimed_test_counts(stale), {3})
+        self.assertNotEqual({3}, {plainlang.test_count()})
+
     def test_gate_catches_a_named_package(self):
         self.assertEqual(plainlang.outside_mentions('Built after reading examplepkg.'), ['examplepkg'])
         self.assertEqual(plainlang.outside_mentions('Nothing to cite here.'), [])
