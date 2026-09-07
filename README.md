@@ -1,6 +1,6 @@
 # Work-Process Skills for Claude Code and Codex CLI
 
-Skills that make coding agents define done, plan with checks, preserve context across sessions, and prove work is finished. One install, both runtimes.
+The decisions around the work, made explicit. One install, both runtimes.
 
 [![Tests](https://img.shields.io/badge/tests-49%20passing-brightgreen)](docs/verification.md)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -13,7 +13,7 @@ Useful agent workflows often have nothing to do with your domain.
 
 ## What problem does this solve?
 
-**Summary:** Coding agents fail predictably at four things. They start before the request is clear. They call work done without proving it. They lose the thread between sessions. They run unattended loops that report success without evidence. These skills address each failure with a saved file rather than a longer prompt.
+**Summary:** Coding agents fail in predictable ways. They start before the request is clear. They call work done without proving it. They lose the thread between sessions. They run unattended loops that report success without evidence. Each skill here answers one of those failures with a saved file rather than a longer prompt.
 
 | Failure | Skill | What you get |
 |---|---|---|
