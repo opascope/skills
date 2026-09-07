@@ -31,6 +31,13 @@
       "on": "project",
       "absent_path": "index.md",
       "adversarial": true
+    },
+    {
+      "id": "does-not-ask-what-you-already-answered",
+      "why": "The promise is that it asks about the choices you did not make. The request named index.md, so asking which file to write is asking back something already settled.",
+      "on": "artifact",
+      "absent": "\\b(which|what|do you want|would you (like|prefer)|should (i|we|it))\\b[^\\n]*\\b(index\\.md|topics\\.md|file ?name|name (the|for))",
+      "adversarial": true
     }
   ]
 }

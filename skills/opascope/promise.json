@@ -15,7 +15,7 @@
       "id": "does-not-run-it-for-you",
       "why": "The request asks for a recommendation. Producing the chosen skill's output instead takes a decision the reader had not made yet.",
       "on": "artifact",
-      "absent": "This is solved when",
+      "absent": "This is solved when|Done means|^\\s*Objective:",
       "adversarial": true
     }
   ]

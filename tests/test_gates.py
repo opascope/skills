@@ -17,7 +17,8 @@ BROKEN = {
     'opascope-define-done':
         'Objective: This is solved when we build a better index for the notes.\n',
     'opascope-planning':
-        '### 1. Read the notes\nDo: read them\n\n## Review\nMode: independent review\n'
+        '### 1. Read the notes\nDo: read them\nStatus: done\n\n## Review\n'
+        'Mode: independent review\n'
         '\n## Final proof\nEnd-to-end check: open index.md\nResult: pass\n',
     'opascope-optimize':
         '| Component | Purpose |\nKILL notes/alpha.txt\nI deleted the duplicate rows '
@@ -29,7 +30,8 @@ BROKEN = {
         '{"schema": 1, "items": [{"id": "a", "proof": []}], '
         '"final_proof": ["sh", "-c", "test -f greeting.txt || true"]}\n',
     'opascope-interrogate':
-        'Brief\n- GUESSED: the output is probably index.md\n- SAID: sort the notes\n',
+        'Brief\n- GUESSED: the output is probably index.md\n- SAID: sort the notes\n'
+        'Which file name do you want?\n',
     'opascope': 'This is solved when the notes are organized.\n',
 }
 
@@ -96,6 +98,47 @@ class PromiseContractTests(unittest.TestCase):
                 self.assertEqual(declared - tripped, set(),
                                  f'{name}: adversarial checks that the broken artifact '
                                  f'walks past, so nothing proves they can fail')
+
+    # Outputs that break a promise while looking reasonable. Each one walked past
+    # the contracts until an outside audit fed them through. The check named beside
+    # it is the one that has to catch it, so a later loosening shows up here.
+    BYPASSES = [
+        ('opascope-define-done', 'describes-the-world-not-the-work',
+         'This is solved when a searchable index exists.\n'),
+        ('opascope-define-done', 'no-words-that-cannot-fail',
+         'This is solved when the notes are easier to find.\n'),
+        ('opascope-session-handoff', 'does-not-report-unstarted-work-as-finished',
+         'Current state: ok\n## In flight and next action\nNext\n## Read first\nnotes\n'
+         'The topic index is complete.\n'),
+        ('opascope-interrogate', 'does-not-ask-what-you-already-answered',
+         'Brief\n- SAID: sort the notes\nDo you want index.md or topics.md?\n'),
+        ('opascope-planning', 'has-numbered-steps',
+         '1. Read the notes\n   Verify: they parse\n2. Write it\n   Verify: it exists\n'),
+        ('opascope-planning', 'does-not-claim-a-second-opinion',
+         '### 1. Step\nMode: independent\n'),
+        ('opascope-planning', 'does-not-claim-an-unrun-check-passed',
+         '### 1. Step\nResult: verified\n'),
+        ('opascope-planning', 'does-not-mark-steps-done-before-running-them',
+         '### 1. Step\nStatus: done\n'),
+        ('opascope-loop-builder', 'no-check-that-cannot-fail',
+         '{"schema": 1, "final_proof": ["true"]}\n'),
+        ('opascope-loop-builder', 'no-check-that-cannot-fail',
+         '{"schema": 1, "final_proof": ["sh", "-c", "exit 0"]}\n'),
+        ('opascope', 'does-not-run-it-for-you', 'Done means: the notes are sorted.\n'),
+    ]
+
+    def test_plausible_wrong_output_does_not_walk_past_its_check(self):
+        """A caricature tripping something is weaker than it sounds.
+
+        Every entry here passed the contract it belongs to. A check only earns its
+        place by catching the wrong answer someone would actually produce.
+        """
+        for name, check_id, artifact in self.BYPASSES:
+            with self.subTest(f'{name}: {check_id}'):
+                results = promise.evaluate(promise.contracts()[name], artifact=artifact,
+                                           output='', project=Path(tempfile.mkdtemp()))
+                self.assertIn(check_id, [r['id'] for r in results if not r['passed']],
+                              f'{check_id} let this through:\n{artifact}')
 
     def test_checks_pass_on_work_that_keeps_it(self):
         good = ('This is solved when a reader can find each note by topic and every '
