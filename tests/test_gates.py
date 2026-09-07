@@ -113,6 +113,19 @@ class PlainLanguageTests(unittest.TestCase):
         self.assertEqual([f for f in findings if 'mentions' in f['message']], [])
         self.assertTrue(plainlang.NO_MENTION)
 
+    def test_gate_catches_parallel_sentence_openers(self):
+        """The rhythm that reads as machine-written even when every word is plain."""
+        cringe = ('The launcher is not a scheduler. It does not wake automatically. '
+                  'It does not retry after exit. It does not handle your allowance.')
+        self.assertEqual(plainlang.parallel_runs(cringe), [('it does', 3)])
+
+    def test_parallel_detector_leaves_ordinary_prose_alone(self):
+        fine = ('You start every run yourself. Nothing wakes on a schedule, retries after '
+                'a crash, or runs in the background. Proofs run with your privileges.')
+        self.assertEqual(plainlang.parallel_runs(fine), [])
+        pair = 'It does not wake. It does not retry. Something else entirely.'
+        self.assertEqual(plainlang.parallel_runs(pair), [])
+
     def test_gate_catches_a_named_package(self):
         self.assertEqual(plainlang.outside_mentions('Built after reading gstack.'), ['gstack'])
         self.assertEqual(plainlang.outside_mentions('Nothing to cite here.'), [])
