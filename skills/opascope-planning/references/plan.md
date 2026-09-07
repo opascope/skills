@@ -1,4 +1,4 @@
-# Plan template and example
+# Plan template with a verification step per action
 
 Use only the sections that help someone execute the task cold.
 

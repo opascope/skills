@@ -8,7 +8,7 @@ metadata:
     codex: full; same contract with bounded codex exec launcher
 ---
 
-# Loop builder
+# Build an unattended Claude Code or Codex loop
 
 Read [shared.md](shared.md) first. Keep the loop in the shared task directory.
 Read [references/contract.md](references/contract.md) before writing its files.

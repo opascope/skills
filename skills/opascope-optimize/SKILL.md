@@ -8,7 +8,7 @@ metadata:
     codex: full; sequential evidence and counterargument passes without team tools
 ---
 
-# Optimize
+# Audit a codebase or process for what to delete
 
 Read [shared.md](shared.md) first. Save a report with kind `optimization`.
 The only writes are report/task artifacts. Never edit, delete, reconfigure or

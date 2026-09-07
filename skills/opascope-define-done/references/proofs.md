@@ -1,4 +1,4 @@
-# Evidence for an objective
+# Evidence that an objective has actually been met
 
 Choose a proof that measures the clause, not merely a convenient proxy.
 

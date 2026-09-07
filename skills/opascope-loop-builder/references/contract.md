@@ -1,4 +1,4 @@
-# Portable loop contract
+# Loop contract format and proof rules
 
 Create a task through `kit.py new`. In that directory, create:
 

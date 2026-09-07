@@ -8,7 +8,7 @@ metadata:
     codex: full; available question tool or numbered text with a real wait
 ---
 
-# Interrogate
+# Interrogate a request before an agent starts work
 
 Read [shared.md](shared.md) first. Save the final brief with kind `brief`.
 

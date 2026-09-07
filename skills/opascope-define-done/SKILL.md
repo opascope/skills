@@ -8,7 +8,7 @@ metadata:
     codex: full; shell verification and questions or text
 ---
 
-# Define done
+# Define done for an AI coding task
 
 Read [shared.md](shared.md) first. Save the result with kind `objective`.
 
