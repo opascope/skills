@@ -1,0 +1,30 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the floor the README states. Testing only the newest would let
+        # the floor rot without anyone noticing.
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: No dependencies to install
+        run: python3 -c "import sys; print(sys.version)"
+      - name: Tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Contracts are well formed
+        run: python3 promise.py check
+      - name: Reader-facing words
+        run: python3 plainlang.py --strict

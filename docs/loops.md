@@ -2,8 +2,8 @@
 
 The loop-builder skill writes the contract described in its
 [reference](../skills/opascope-loop-builder/references/contract.md). A loop task
-is created by `kit.py new`, so it shares the artifact substrate with the other
-skills. All file paths in proof arguments are relative to the project root
+is created by `kit.py new`, so its files are stored the same way as every other
+skill's. All file paths in proof arguments are relative to the project root
 unless absolute. Keep verifier scripts within that project and list them in
 `verifier_files` before sealing.
 
@@ -44,8 +44,8 @@ review them before sharing. Standard output reports status, not full logs.
 
 A blocker is an active `- BLOCKED:` line in BLOCKERS.md. Resolve its stated
 condition, move its history into NOTES.md, then explicitly rerun. A blocked or
-paused loop is not done. No automatic retries after process exit, quota wakeups,
-daemon or scheduler are installed. The per-call timeout stops the child's process
+paused loop is not done. Nothing retries after the process exits, wakes when your
+usage allowance resets, or runs on a schedule. The per-call timeout stops the child's process
 group. A hard crash can leave run.lock; inspect for a surviving process before
 manually removing that lock. The lock is not removed speculatively by the runner.
 

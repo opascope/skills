@@ -2,7 +2,7 @@
 
 The decisions around the work, made explicit. One install, both runtimes.
 
-[![Tests](https://img.shields.io/badge/tests-54%20passing-brightgreen)](docs/verification.md)
+[![Checks](https://github.com/opascope/skills/actions/workflows/checks.yml/badge.svg)](https://github.com/opascope/skills/actions/workflows/checks.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Runtimes](https://img.shields.io/badge/runtimes-Claude%20Code%20%7C%20Codex%20CLI-blueviolet)](#which-runtimes-are-supported)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)](#requirements)

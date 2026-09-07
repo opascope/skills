@@ -42,7 +42,7 @@ sharing it, as they would any other working notes.
 
 Canonical skills live under `skills/opascope-*`. Each installation creates a real
 directory with links to its canonical skill's files, including shared `kit.py` and
-`shared.md` links. This keeps discovery flat without copying doctrine. Claude Code
+`shared.md` links. This keeps discovery flat without copying the skill text. Claude Code
 uses `.claude/skills`; Codex uses `.agents/skills`, either below the user's home or
 a selected project. `AGENTS.md` governs this repository; `CLAUDE.md` links to it.
 Neither is injected into a consumer's project.
@@ -128,5 +128,4 @@ against, so the table cannot drift away from tested behavior.
 ## Scope
 
 All implementation and documentation here were independently written. There is no
-imported code, generated skill text, build toolchain, browser component or usage
-telemetry.
+imported code, generated skill text, build toolchain or usage telemetry.
