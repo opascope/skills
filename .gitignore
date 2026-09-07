@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.opascope-work/
+.opascope-skills-install.json
+.opascope-skills-install.lock
