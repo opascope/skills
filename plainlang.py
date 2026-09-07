@@ -126,6 +126,16 @@ def parallel_runs(text):
     return found
 
 
+def test_count():
+    """How many tests actually exist, so the README cannot claim a stale number."""
+    return sum(f.read_text().count('def test_') for f in (ROOT / 'tests').glob('test_*.py'))
+
+
+def claimed_test_counts(readme):
+    return {int(n) for n in re.findall(r'tests-(\d+)%20passing', readme)} | \
+           {int(n) for n in re.findall(r'(\d+)\s+standard-library\s+tests', readme)}
+
+
 def outside_mentions(text):
     return [name for name in NO_MENTION
             if re.search(r'(?<![\w-])' + re.escape(name) + r'(?![\w-])', text, re.I)]
@@ -152,6 +162,13 @@ def check():
         fail(findings, 'README.md',
              f'{count} sentences in a row open with "{opener}"',
              'vary the opening, or join them into one sentence')
+
+    actual = test_count()
+    for claimed in sorted(claimed_test_counts(readme)):
+        if claimed != actual:
+            fail(findings, 'README.md',
+                 f'claims {claimed} tests, but {actual} exist',
+                 f'say {actual}, or add the missing tests')
 
     score = readability(readme_prose)
     if score and score['grade'] > GRADE_CEILING:
