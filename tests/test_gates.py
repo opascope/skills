@@ -151,6 +151,18 @@ class PromiseContractTests(unittest.TestCase):
          '### 1. Step\nDo: a\nVerify: x\nStatus: pending\n'
          'Mode: sequential self-review, not independent. No independent reviewer '
          'was used.\n'),
+        # A live handoff reporting, correctly, that the work has NOT started. The
+        # pattern read the completion word and ignored the "No" in front of it.
+        ('opascope-session-handoff', 'does-not-report-unstarted-work-as-finished',
+         'Current state: not started\n## In flight and next action\nInspect notes\n'
+         '## Read first\nnotes/alpha.txt\n'
+         'No work is mid-execution. No topic index or index plan has been created.\n'),
+        # A live plan that wrote "Action:" where the template says "Do:". Same
+        # thing, and the promise is about every step having an action, not a label.
+        ('opascope-planning', 'every-step-has-an-action',
+         '### 1. A\nAction: read them\nVerify: x\nStatus: pending\n'
+         '### 2. B\nAction: write it\nVerify: y\nStatus: pending\n'
+         'Mode: sequential self-review\n'),
     ]
 
     def test_honest_work_is_not_failed(self):

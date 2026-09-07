@@ -15,7 +15,7 @@
       "id": "every-step-has-an-action",
       "why": "A step with no stated action is a heading, not work anyone can pick up.",
       "on": "artifact",
-      "at_least": "^\\s*Do:",
+      "at_least": "^\\s*(Do|Action):",
       "per": "^###\\s*\\d+\\.",
       "adversarial": false
     },
