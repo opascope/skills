@@ -8,8 +8,11 @@
 - Per-step checks hold per step. Comparing totals across a plan let three checks
   on one step cover two steps with none.
 - Every contract carries a compliant output that all of its checks must pass.
-  Running the skills for real found four patterns that failed correct work,
-  including a plan penalised for admitting it had no independent reviewer.
+  Running the skills for real found eight checks that failed work which kept the
+  promise, including a plan penalised for admitting it had no independent
+  reviewer. It found no skill breaking a promise.
+- Final runs: every skill plus the router on both runtimes, all 36 checks held
+  on each, fixtures unchanged. See docs/verification.md.
 - The outputs that once slipped past, and the correct ones once wrongly failed,
   ship as tests.
 - The router's promise said it points you at a skill "instead of picking one for
@@ -22,7 +25,8 @@
 
 ## 0.2.0
 
-- Per-skill promise contracts with adversarial checks, evaluated against real runs.
+- Per-skill promise contracts with adversarial checks, checked offline against
+  fabricated outputs and one live run of a single skill.
 - Live runtime cases now come from the contracts, so adding a skill edits no test.
 - Plain-language gate on skill names, promises and the README.
 - README rewritten in plain words against that gate, and given headings
