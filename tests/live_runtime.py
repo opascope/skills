@@ -21,6 +21,36 @@ SEED = {
 }
 
 
+def final_text(output):
+    """The model's own last words, not the tool trace around them.
+
+    A check that reads the whole JSONL matches the skill's own table and
+    instructions echoed back inside the trace, so it passes without the run
+    having said anything. Only the final answer is evidence of what was claimed.
+    Both runtimes are handled: an explicit result event wins, otherwise the
+    assistant text blocks are joined in order.
+    """
+    spoken = []
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if isinstance(event.get('result'), str):
+            return event['result']
+        message = event.get('message')
+        if isinstance(message, dict) and message.get('role') == 'assistant':
+            for block in message.get('content') or []:
+                if isinstance(block, dict) and block.get('type') == 'text':
+                    spoken.append(block.get('text', ''))
+        item = event.get('item')
+        if isinstance(item, dict) and item.get('type') == 'agent_message':
+            spoken.append(item.get('text', ''))
+    return '\n'.join(spoken)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', choices=['claude', 'codex'], required=True)
@@ -58,9 +88,11 @@ def main():
         try:
             code, output = loops.execute(command, project, args.seconds, prompt)
             (evidence / (name + '-runtime.jsonl')).write_text(output)
-            # The promise checks read what the run actually produced. The tool
-            # trace is retained beside them for a human to read the same run.
-            checks = promise.evaluate(contract, promise.read_artifacts(project), output, project)
+            # The promise checks read what the run actually produced and what it
+            # finally said. The full trace is retained beside them, but never
+            # scored: it echoes the skill's own text and would pass every check.
+            checks = promise.evaluate(contract, promise.read_artifacts(project),
+                                      final_text(output), project)
             preserved = all(hashlib.sha256((project / relative).read_bytes()).hexdigest() == digest
                             for relative, digest in before.items())
             result = {'runtime': args.runtime, 'skill': name, 'exit': code,

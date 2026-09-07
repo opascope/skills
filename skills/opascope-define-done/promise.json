@@ -1,7 +1,7 @@
 {
   "promise": "Writes one sentence you can check as true or false.",
   "fixture": {
-    "request": "Define done for sorting the two supplied notes by topic without losing their contents. Alignment only. Save the objective."
+    "request": "Define done for sorting the two supplied notes by topic without losing their contents, where the eventual output is index.md. Alignment only: do not create index.md. Save the objective."
   },
   "assertions": [
     {

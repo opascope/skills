@@ -1,7 +1,7 @@
 {
   "promise": "Leaves the next session the exact next step and proof of what is already done.",
   "fixture": {
-    "request": "Write a handoff for this toy task: notes are present, index creation is not started, next step is inspect both notes and plan a topic index. No blockers or external actions. Verify disk state. Save and prove cold pickup."
+    "request": "Write a handoff for this toy task: notes are present, index.md is not started, next step is inspect both notes and plan a topic index in index.md. Do not create it. No blockers or external actions. Verify disk state. Save and prove cold pickup."
   },
   "assertions": [
     {

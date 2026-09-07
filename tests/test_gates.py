@@ -34,6 +34,23 @@ BROKEN = {
 }
 
 
+def project_where_the_work_was_done():
+    """A project holding every file the contracts say must NOT be there.
+
+    An `absent_path` check scored against a tree that never contained the file
+    passes for free, which is how six of them sat dead. Planting the paths from
+    the contracts themselves means a new one is covered the day it is written.
+    """
+    root = Path(tempfile.mkdtemp(prefix='opascope-broken-'))
+    for contract in promise.contracts().values():
+        for assertion in contract['assertions']:
+            if 'absent_path' in assertion:
+                planted = root / assertion['absent_path']
+                planted.parent.mkdir(parents=True, exist_ok=True)
+                planted.write_text('work the skill was told not to start\n')
+    return root
+
+
 class PromiseContractTests(unittest.TestCase):
     def test_every_installed_skill_ships_a_contract(self):
         contracts = promise.contracts()
@@ -55,11 +72,30 @@ class PromiseContractTests(unittest.TestCase):
         for name, artifact in BROKEN.items():
             with self.subTest(name):
                 contract = promise.contracts()[name]
-                results = promise.evaluate(contract, artifact=artifact, output='', project=ROOT)
+                results = promise.evaluate(contract, artifact=artifact, output='',
+                                           project=project_where_the_work_was_done())
                 broken = [r for r in results if not r['passed']]
                 self.assertTrue(broken, f'{name} accepted an artifact that breaks its promise')
                 self.assertTrue(any(r['adversarial'] for r in broken),
                                 f'{name} caught nothing with an adversarial check')
+
+    def test_every_adversarial_check_actually_trips(self):
+        """One trip per contract hides a dead check behind a live one beside it.
+
+        A check nothing ever trips is indistinguishable from a check whose regex
+        stopped matching. Naming the untripped ones is the only way that stays true
+        as contracts are edited.
+        """
+        for name, artifact in BROKEN.items():
+            contract = promise.contracts()[name]
+            results = promise.evaluate(contract, artifact=artifact, output='',
+                                       project=project_where_the_work_was_done())
+            tripped = {r['id'] for r in results if not r['passed']}
+            declared = {a['id'] for a in contract['assertions'] if a.get('adversarial')}
+            with self.subTest(name):
+                self.assertEqual(declared - tripped, set(),
+                                 f'{name}: adversarial checks that the broken artifact '
+                                 f'walks past, so nothing proves they can fail')
 
     def test_checks_pass_on_work_that_keeps_it(self):
         good = ('This is solved when a reader can find each note by topic and every '
@@ -108,10 +144,9 @@ class PlainLanguageTests(unittest.TestCase):
                 self.assertTrue(plainlang.FIXED_COUNT.search(phrase))
         self.assertIsNone(plainlang.FIXED_COUNT.search('the skills in this package'))
 
-    def test_no_document_names_another_package(self):
+    def test_no_document_points_at_another_package(self):
         findings, _ = plainlang.check()
-        self.assertEqual([f for f in findings if 'mentions' in f['message']], [])
-        self.assertTrue(plainlang.NO_MENTION)
+        self.assertEqual([f for f in findings if 'links to another account' in f['message']], [])
 
     def test_gate_catches_parallel_sentence_openers(self):
         """The rhythm that reads as machine-written even when every word is plain."""
@@ -135,9 +170,12 @@ class PlainLanguageTests(unittest.TestCase):
         self.assertEqual(plainlang.claimed_test_counts(stale), {3})
         self.assertNotEqual({3}, {plainlang.test_count()})
 
-    def test_gate_catches_a_named_package(self):
-        self.assertEqual(plainlang.outside_mentions('Built after reading gstack.'), ['gstack'])
-        self.assertEqual(plainlang.outside_mentions('Nothing to cite here.'), [])
+    def test_gate_catches_a_link_to_another_account(self):
+        theirs = 'Informed by [a tool](https://github.com/someone-else/their-tool).'
+        self.assertEqual(plainlang.outside_links(theirs),
+                         ['https://github.com/someone-else'])
+        ours = 'git clone https://github.com/opascope/skills.git'
+        self.assertEqual(plainlang.outside_links(ours), [])
 
     def test_every_skill_is_listed_in_the_readme(self):
         table = set((ROOT / 'README.md').read_text().split())
