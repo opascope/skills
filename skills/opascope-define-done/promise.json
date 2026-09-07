@@ -1,7 +1,7 @@
 {
   "promise": "Writes one sentence you can check as true or false.",
   "fixture": {
-    "request": "Define done for sorting the two supplied notes by topic without losing their contents. Alignment only. Save the objective."
+    "request": "Define done for sorting the two supplied notes by topic without losing their contents, where the eventual output is index.md. Alignment only: do not create index.md. Save the objective."
   },
   "assertions": [
     {
@@ -22,14 +22,14 @@
       "id": "describes-the-world-not-the-work",
       "why": "Building something is an activity. The sentence has to describe what is true afterwards, or it cannot be checked.",
       "on": "artifact",
-      "absent": "This is solved when[^.\\n]*\\b(we|I) (build|create|implement|add|write|make)\\b",
+      "absent": "This is solved when[^.\\n]*\\b(we|I) (build|create|implement|add|write|make)\\b|This is solved when[^.\\n]*\\b(exists|is built|is created|is added|is in place|is implemented)\\b",
       "adversarial": true
     },
     {
       "id": "no-words-that-cannot-fail",
       "why": "Nobody can disagree that something is better. A word with no failing case makes the sentence unfalsifiable.",
       "on": "artifact",
-      "absent": "This is solved when[^.\\n]*\\b(better|streamlined|improved|optimized|robust|seamless|clean)\\b",
+      "absent": "This is solved when[^.\\n]*\\b(better|streamlined|improved|optimized|robust|seamless|clean|easier|faster|simpler|nicer|organized|efficient)\\b",
       "adversarial": true
     },
     {

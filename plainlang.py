@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import unittest
 
 ROOT = Path(__file__).resolve().parent
 
@@ -42,9 +43,9 @@ INSIDER = {
 FIXED_COUNT = re.compile(
     r'\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+'
     r'(work-process\s+|process\s+)?skills\b', re.I)
-# Names that must not appear anywhere in the package. Reading how another
+# The only GitHub account this package may point a reader at. Reading how another
 # project was put together is not a reason to advertise it in our own docs.
-NO_MENTION = ('examplepkg', 'exampleuser')
+OWN_ACCOUNT = 'opascope'
 GRADE_CEILING = 8.0
 SENTENCE_CEILING = 17.0
 NAME_TOKENS = (1, 3)
@@ -127,18 +128,38 @@ def parallel_runs(text):
 
 
 def test_count():
-    """How many tests actually exist, so the README cannot claim a stale number."""
-    return sum(f.read_text().count('def test_') for f in (ROOT / 'tests').glob('test_*.py'))
+    """How many tests the runner will actually run, so the README cannot go stale.
+
+    This counted the string `def test_` in `tests/test_*.py`. That inflated on a
+    docstring that merely mentioned the string, and missed a file `discover`
+    collects but the glob does not, so the number could be wrong in both
+    directions while the gate reported clean. Ask the runner instead.
+    """
+    return unittest.TestLoader().discover(str(ROOT / 'tests')).countTestCases()
 
 
 def claimed_test_counts(readme):
+    """Every test count the README states, in any phrasing.
+
+    Pinning this to the exact words "standard-library tests" meant rewording the
+    sentence silently switched the gate off.
+    """
     return {int(n) for n in re.findall(r'tests-(\d+)%20passing', readme)} | \
-           {int(n) for n in re.findall(r'(\d+)\s+standard-library\s+tests', readme)}
+           {int(n) for n in re.findall(r'\b(\d+)\s+(?:[a-z-]+\s+)?tests\b', readme)}
 
 
-def outside_mentions(text):
-    return [name for name in NO_MENTION
-            if re.search(r'(?<![\w-])' + re.escape(name) + r'(?![\w-])', text, re.I)]
+OUTSIDE_LINK = re.compile(r'https?://(?:www\.)?github\.com/([A-Za-z0-9][\w.-]*)', re.I)
+
+
+def outside_links(text):
+    """Links to somebody else's repository, in prose this package ships.
+
+    This gate used to hold the names it was banning. Shipping that list put the
+    names in the tree permanently, which is the thing the gate exists to avoid,
+    so it checks the shape instead: a GitHub link to an account that is not ours.
+    """
+    return sorted({match.group(0) for match in OUTSIDE_LINK.finditer(text)
+                   if match.group(1).lower() != OWN_ACCOUNT})
 
 
 def fail(findings, surface, message, fix=''):
@@ -189,9 +210,10 @@ def check():
 
     for path in sorted(ROOT.glob('*.md')) + sorted(ROOT.glob('docs/*.md')) + \
             sorted(ROOT.glob('skills/*/**/*.md')):
-        for name in outside_mentions(path.read_text()):
+        for link in outside_links(path.read_text()):
             fail(findings, str(path.relative_to(ROOT)),
-                 f'mentions "{name}"', 'this package does not reference other packages')
+                 f'links to another account: {link}',
+                 'this package does not point readers at other packages')
 
     table = {name: sentence.strip() for name, sentence in re.findall(
         r'^\|\s*`?([a-z][a-z0-9-]*)`?\s*\|\s*(.+?)\s*\|\s*$', readme, re.M)}
@@ -203,12 +225,12 @@ def check():
             continue
     for skill in skills():
         name = skill.name
-        if name == 'opascope':
-            continue
-        if not name.startswith('opascope-'):
+        # The router used to be exempt here, which is how its promise sentence
+        # came to say the opposite of what it does without anything noticing.
+        if name != 'opascope' and not name.startswith('opascope-'):
             fail(findings, name, 'skill directory is missing the opascope- prefix')
             continue
-        bare = name[len('opascope-'):]
+        bare = name[len('opascope-'):] if name.startswith('opascope-') else name
         parts = bare.split('-')
         if not NAME_TOKENS[0] <= len(parts) <= NAME_TOKENS[1]:
             fail(findings, name, f'name has {len(parts)} words, keep it to '

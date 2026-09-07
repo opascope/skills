@@ -1,5 +1,5 @@
 {
-  "promise": "Points you at the right skill instead of picking one for you.",
+  "promise": "Names the skill that fits, and runs it only if you asked for the work.",
   "fixture": {
     "request": "Which one of your work-process skills fits this request: I need a sentence I can check as true or false for organizing notes? Recommend only; do not execute the chosen skill."
   },
@@ -15,7 +15,7 @@
       "id": "does-not-run-it-for-you",
       "why": "The request asks for a recommendation. Producing the chosen skill's output instead takes a decision the reader had not made yet.",
       "on": "artifact",
-      "absent": "This is solved when",
+      "absent": "This is solved when|Done means|^\\s*Objective:",
       "adversarial": true
     }
   ]

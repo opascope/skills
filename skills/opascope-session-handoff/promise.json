@@ -1,7 +1,7 @@
 {
   "promise": "Leaves the next session the exact next step and proof of what is already done.",
   "fixture": {
-    "request": "Write a handoff for this toy task: notes are present, index creation is not started, next step is inspect both notes and plan a topic index. No blockers or external actions. Verify disk state. Save and prove cold pickup."
+    "request": "Write a handoff for this toy task: notes are present, index.md is not started, next step is inspect both notes and plan a topic index in index.md. Do not create it. No blockers or external actions. Verify disk state. Save and prove cold pickup."
   },
   "assertions": [
     {
@@ -29,7 +29,7 @@
       "id": "does-not-report-unstarted-work-as-finished",
       "why": "The request says the index is not started. Recording it as written is the exact failure that makes a handoff dangerous, because the next session trusts it.",
       "on": "artifact",
-      "absent": "(\\b(created|wrote|built|generated)\\s+index\\.md|index\\.md[^\\n]*\\b(is\\s+)?(complete|created|done|written)\\b)",
+      "absent": "^(?![^\\n]*\\b(?:no|not|never|yet|unstarted)\\b)[^\\n]*\\b(?:created|wrote|built|generated)\\s+(?:the\\s+)?(?:topic\\s+)?index(?:\\.md)?\\b|^(?![^\\n]*\\b(?:no|not|never|yet|unstarted)\\b)[^\\n]*\\b(?:topic\\s+)?index(?:\\.md)?[^\\n]*\\b(?:is\\s+)?(?:complete|created|done|written|finished)\\b",
       "adversarial": true
     },
     {

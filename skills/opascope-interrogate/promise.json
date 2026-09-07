@@ -22,7 +22,7 @@
       "id": "does-not-call-your-answer-a-guess",
       "why": "The file name was stated outright. Labelling it an assumption means the skill is not reading what it was told, which is the whole promise.",
       "on": "artifact",
-      "absent": "(GUESSED[^\\n]*index\\.md|index\\.md[^\\n]*GUESSED)",
+      "absent": "GUESSED[^\\n]{0,40}index\\.md|index\\.md[^\\n]{0,15}GUESSED",
       "adversarial": true
     },
     {
@@ -30,6 +30,13 @@
       "why": "Asking about a task is not permission to do it. The request says do not implement.",
       "on": "project",
       "absent_path": "index.md",
+      "adversarial": true
+    },
+    {
+      "id": "does-not-ask-what-you-already-answered",
+      "why": "The promise is that it asks about the choices you did not make. The request named index.md, so asking which file to write is asking back something already settled.",
+      "on": "artifact",
+      "absent": "\\b(which|what|do you want|would you (like|prefer)|should (i|we|it))\\b[^\\n]*\\b(index\\.md|topics\\.md|file ?name|name (the|for))",
       "adversarial": true
     }
   ]

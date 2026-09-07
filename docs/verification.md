@@ -38,6 +38,44 @@ printed task path, the appropriate runtime, and a small iteration/time budget.
 Check that independent proofs initially fail, the runtime creates the output,
 the same proofs then pass, and rerunning needs no further runtime call.
 
+## 0.3.0 release results
+
+Verified on Linux on 2026-09-07 with Claude Code 2.1.263 and Codex CLI 0.153.4.
+
+- 56 standard-library automated tests passed, on Python 3.9 and 3.12 in CI.
+- Every skill plus the router ran for real on both runtimes. All 36 contract
+  checks held on each: 72 passing evaluations, with every fixture file
+  unchanged afterwards.
+
+What the runs actually caught is worth stating plainly, because it is the
+opposite of what these runs are usually reported to show. Across three rounds on
+both runtimes, no skill was found breaking its promise. Eight CHECKS were found
+failing work that kept it.
+
+Each of the eight had the same shape. A pattern written to catch a claim also
+caught the denial of that claim, or caught a synonym the runtime had every right
+to use:
+
+- A plan recorded `Mode: sequential self-review, not independent`, which is the
+  disclosure the skill instructs it to write. The check read the word
+  "independent" and called it a claim of independent review.
+- A handoff wrote `No topic index or index plan has been created`, correctly
+  reporting that nothing had started. The check read the completion word and
+  ignored the "No" in front of it.
+- A brief labelled a stated file name SAID and only the unstated detail GUESSED,
+  exactly as promised. The check failed it for naming both on one line.
+- A plan wrote `Action:` where the template says `Do:`. Same meaning, and the
+  promise is about every step having an action, not about a label.
+- A report ruled QUESTION on the planted waste, with evidence and two open
+  questions about who reads it. Asking is looking; the check wanted a deletion.
+- A checklist said `Require exit 0 before marking done`, which is prose telling a
+  worker how to verify. The check read it as a proof that cannot fail.
+
+None of these appeared in offline testing. Fabricated artifacts prove a check can
+fail; only a real run proves it fails for the right reason. Every one of those
+six outputs is now a fixture in `tests/test_gates.py` that the checks must keep
+passing, alongside the wrong answers they must keep catching.
+
 ## 0.1.0 release results
 
 Verified on Linux on 2026-09-07 with Claude Code 2.1.263 and Codex CLI 0.153.4.
@@ -74,24 +112,16 @@ claim. The correction was recorded in the checkpoint, the blocker cleared, and
 the same sealed criteria resumed successfully. This is a real limitation of
 model judgment, not a reason to soften the proof or equate a blocker with done.
 
-The first nested toy-project test also inherited its parent project's artifact
-root. Moving the harness to standalone temporary projects corrected the test
-boundary. Additional fresh-clone handoff runs exercised both runtimes with the
-final root and preservation instructions.
-
-The usage command was run against actual local transcripts in addition to
-fixtures. That exposed built-in command false positives, which were corrected
-with catalogue matching and regression tests. No personal rankings or raw
-transcripts are published.
+The usage command was run against real local transcripts as well as fixtures.
+No personal rankings or raw transcripts are published.
 
 ## Publication checks
 
 All shippable paths were swept for private identifiers, paths, configuration
-names and sensitive figures, with a separate proper-noun/path review. No such
-findings remained. Runtime logs, machine-specific receipts and toy artifacts
-are excluded from the Git tree. Source-specific examples, integration calls
-and historical ledgers were not included in the package.
+names and sensitive figures, with a separate proper-noun and path review. No
+such findings remained. Runtime logs, machine-specific receipts and toy files
+are kept out of the Git tree, as is anything specific to the project this was
+extracted from.
 
-All implementation and prose in this package were written independently. A
-whole-file hash sweep across 677 outside reference files found no verbatim
-matches. The license is the standard MIT text with Opascope copyright.
+All implementation and prose in this package were written independently. The
+license is the standard MIT text with Opascope copyright.
