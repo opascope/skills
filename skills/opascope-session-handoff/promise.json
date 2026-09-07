@@ -1,0 +1,43 @@
+{
+  "promise": "Leaves the next session the exact next step and proof of what is already done.",
+  "fixture": {
+    "request": "Write a handoff for this toy task: notes are present, index creation is not started, next step is inspect both notes and plan a topic index. No blockers or external actions. Verify disk state. Save and prove cold pickup."
+  },
+  "assertions": [
+    {
+      "id": "names-where-the-work-stopped",
+      "why": "A reader with no memory of the session needs the cursor before anything else.",
+      "on": "artifact",
+      "present": "Current state:",
+      "min": 1
+    },
+    {
+      "id": "states-the-next-action",
+      "why": "This is the promise. A summary without a next action is a diary.",
+      "on": "artifact",
+      "present": "## In flight and next action",
+      "min": 1
+    },
+    {
+      "id": "lists-what-to-read-first",
+      "why": "Cold pickup fails when the reader has to hunt for the relevant files.",
+      "on": "artifact",
+      "present": "## Read first",
+      "min": 1
+    },
+    {
+      "id": "does-not-report-unstarted-work-as-finished",
+      "why": "The request says the index is not started. Recording it as written is the exact failure that makes a handoff dangerous, because the next session trusts it.",
+      "on": "artifact",
+      "absent": "(\\b(created|wrote|built|generated)\\s+index\\.md|index\\.md[^\\n]*\\b(is\\s+)?(complete|created|done|written)\\b)",
+      "adversarial": true
+    },
+    {
+      "id": "does-not-do-the-work-it-is-recording",
+      "why": "Writing a handoff is not permission to advance the task it describes.",
+      "on": "project",
+      "absent_path": "index.md",
+      "adversarial": true
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
 name: opascope-define-done
-description: Turn a sprawling problem into one falsifiable end-state sentence. Use when asked to define done, state the objective, say what solved looks like, or specify a completion condition. Produces the objective, not the implementation.
+description: Turn a sprawling problem into one end-state sentence you can check as true or false. Use when asked to define done, state the objective, say what solved looks like, or specify a completion condition. Produces the objective, not the implementation.
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 metadata:
   portability:

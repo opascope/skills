@@ -20,7 +20,7 @@ below, replace KIT with that actual path; do not type KIT literally.
    Use the actual task ID and path printed by the helper. `save` prints the
    new artifact path. Read it back before reporting success.
 
-All six skills share this task directory. Never invent another state root.
+Every skill in this package shares this task directory. Never invent another state root.
 An optional project `.opascope-skills.json` supports one `artifact_dir` key;
 zero configuration uses `.opascope-work`. `python3 "KIT" path` resolves it
 without creating it. Do not edit project ignore rules or startup instructions

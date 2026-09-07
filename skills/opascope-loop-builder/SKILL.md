@@ -1,6 +1,6 @@
 ---
 name: opascope-loop-builder
-description: Prepare a bounded agent loop with a falsifiable stopping condition and durable pickup artifacts. Use when asked for unattended work, a resumable loop, or to keep Claude Code or Codex working until a verified outcome. Builds and validates the loop; launches only when execution is requested.
+description: Prepare a long unattended agent run with a spending limit, a stopping condition you can check, and progress saved to files. Use when asked for unattended work, a resumable loop, or to keep Claude Code or Codex working until a verified outcome. Builds and validates the loop; launches only when execution is requested.
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 metadata:
   portability:

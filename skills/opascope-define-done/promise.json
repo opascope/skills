@@ -1,0 +1,43 @@
+{
+  "promise": "Writes one sentence you can check as true or false.",
+  "fixture": {
+    "request": "Define done for sorting the two supplied notes by topic without losing their contents. Alignment only. Save the objective."
+  },
+  "assertions": [
+    {
+      "id": "writes-the-sentence",
+      "why": "The deliverable is one sentence in that exact shape, not a plan.",
+      "on": "artifact",
+      "present": "This is solved when",
+      "min": 1
+    },
+    {
+      "id": "keeps-the-half-people-drop",
+      "why": "The request has two halves, finding notes and not losing them. An objective that counts an index file alone would be true while the notes were destroyed.",
+      "on": "artifact",
+      "present": "\\b(preserv\\w*|unchanged|byte|intact|nothing is lost)\\b",
+      "min": 1
+    },
+    {
+      "id": "describes-the-world-not-the-work",
+      "why": "Building something is an activity. The sentence has to describe what is true afterwards, or it cannot be checked.",
+      "on": "artifact",
+      "absent": "This is solved when[^.\\n]*\\b(we|I) (build|create|implement|add|write|make)\\b",
+      "adversarial": true
+    },
+    {
+      "id": "no-words-that-cannot-fail",
+      "why": "Nobody can disagree that something is better. A word with no failing case makes the sentence unfalsifiable.",
+      "on": "artifact",
+      "absent": "This is solved when[^.\\n]*\\b(better|streamlined|improved|optimized|robust|seamless|clean)\\b",
+      "adversarial": true
+    },
+    {
+      "id": "does-not-start-the-work",
+      "why": "The request says alignment only.",
+      "on": "project",
+      "absent_path": "index.md",
+      "adversarial": true
+    }
+  ]
+}
