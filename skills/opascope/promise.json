@@ -1,0 +1,22 @@
+{
+  "promise": "Points you at the right skill instead of picking one for you.",
+  "fixture": {
+    "request": "Which one of your work-process skills fits this request: I need a sentence I can check as true or false for organizing notes? Recommend only; do not execute the chosen skill."
+  },
+  "assertions": [
+    {
+      "id": "names-the-right-one",
+      "why": "Routing is the whole job. A general answer sends the reader back to guessing.",
+      "on": "output",
+      "present": "opascope-define-done",
+      "min": 1
+    },
+    {
+      "id": "does-not-run-it-for-you",
+      "why": "The request asks for a recommendation. Producing the chosen skill's output instead takes a decision the reader had not made yet.",
+      "on": "artifact",
+      "absent": "This is solved when",
+      "adversarial": true
+    }
+  ]
+}

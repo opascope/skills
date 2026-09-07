@@ -1,66 +1,73 @@
-# Opascope Skills
+# opascope-skills
 
-Six work-process skills for Claude Code and Codex CLI. Clarify the request,
-define done, plan verifiable steps, preserve context, question unnecessary work,
-and prepare bounded autonomous loops.
-
-Useful agent workflows often have nothing to do with your domain. These skills
-make the decisions around the work explicit, so the work is easier to direct,
-verify and resume.
+This package holds work-process skills for Claude Code and Codex CLI. They do not belong to one job. They help with the decisions around work. They cover what is being asked, what done means, and what the steps are. They cover what got finished, what should not exist, and how to leave a long job running safely. The highest-leverage skills often have little to do with your actual job. They make the decisions explicit, so the work is easier to direct, check, and pick back up.
 
 ## Install
 
-Requires Git, Python 3.9 or newer, and an installed, authenticated Claude Code
-or Codex CLI. macOS, Linux and WSL are supported. There are no Python packages
-to install, no JavaScript runtime, and no build step.
+You need Git, Python 3.9 or newer, and a logged-in Claude Code or Codex CLI. It works on macOS, Linux, and WSL.
 
-```sh
+You do not need pip. You do not need a JavaScript runtime. You do not need to build anything.
+
+Run this command:
+
+```
 git clone https://github.com/opascope/opascope-skills.git && python3 opascope-skills/install.py
 ```
 
-Choose Claude Code, Codex, or both, then choose a global or current-project
-install. The installer previews the location and creates namespaced links.
-Keep the cloned directory in place. Existing skill directories are reported
-as collisions and never overwritten. While this repository is private, Git
-access is required to clone and update it.
+The installer asks which agent you use. It asks whether to install for every project or only this one. It shows you where it will put things before it acts.
 
-Open a new session in your project and try:
+If a skill directory of the same name already exists, it stops. It will not write over one.
 
-```text
-Claude Code: /opascope-define-done I keep losing notes. What would solved look like?
-Codex CLI:  $opascope-define-done I keep losing notes. What would solved look like?
+Leave the cloned folder where it is. The installed links point back to it.
+
+The repository stays private for now. You need Git access to clone or update it.
+
+After you install, try one skill. In Claude Code:
+
+```
+/opascope-define-done I keep losing notes. What would solved look like?
 ```
 
-Use `/opascope` or `$opascope` if you are unsure where to start.
+In Codex CLI:
 
-| Skill | What it does |
+```
+$opascope-define-done I keep losing notes. What would solved look like?
+```
+
+If you are unsure where to start, type `/opascope` or `$opascope`.
+
+## The skills
+
+Skill names start with `opascope-`. To choose, use `opascope`. The same files serve both agents, so you do not need a second copy to keep in sync.
+
+| Skill | What it promises |
 |---|---|
-| interrogate | Turns unverified guesses into a focused question queue and brief. |
-| define-done | Writes the falsifiable sentence that means the problem is solved. |
-| planning | Gives each step an explicit action and a pass/fail check. |
-| session-handoff | Saves verified progress and the exact next action for cold pickup. |
-| optimize | Recommends what to delete or compress, without changing the target. |
-| loop-builder | Prepares durable context and bounded Claude/Codex runs with real proofs. |
+| `interrogate` | Asks about the choices you did not make, and never about the ones you did. |
+| `define-done` | Writes one sentence you can check as true or false. |
+| `planning` | Gives every step one action and a check that passes or fails. |
+| `session-handoff` | Leaves the next session the exact next step and proof of what is already done. |
+| `optimize` | Says what to delete, argues the other side first, and changes nothing. |
+| `loop-builder` | Sets up a long unattended run with a real finish line and a spending limit. |
 
-Every skill name has the `opascope-` prefix. The router is simply `opascope`.
-The same files serve both runtimes; no second copy needs to be kept in sync.
+## Where your working files go
 
-## Your working files
+Files appear on first use in `.opascope-work/<task-id>/` inside your project. You do not need to set anything up.
 
-Artifacts appear on first use in `.opascope-work/<task-id>/` in your project.
-No setup is required. Handoffs, plans and reports are readable markdown. A new
-session can say "use opascope to resume my notes task" and load its handoff.
-Nothing is injected into your startup files.
+They are markdown you can read. They hold notes for the next session, plans, and reports.
 
-For a different location, put `{"artifact_dir": "notes/agent-work"}` in a
-project-root `.opascope-skills.json`. This is the only artifact setting.
-See [architecture](ARCHITECTURE.md) for root resolution and concurrent tasks.
+A later session can say "use opascope to resume my notes task". It will read the notes from the last session.
 
-## Install controls, updates and uninstall
+Your startup and config files stay unchanged.
 
-Run these from the cloned package directory:
+To put them somewhere else, create `.opascope-skills.json` in your project root. Add `{"artifact_dir": "notes/agent-work"}`. The package reads no other keys from that file.
 
-```sh
+See `ARCHITECTURE.md` for how the project root is found. It also explains how two tasks at once are kept apart.
+
+## Install choices, updates, and uninstall
+
+Run these from the cloned folder:
+
+```
 python3 install.py --runtime both --base /path/to/project --yes
 python3 install.py status --base /path/to/project
 python3 kit.py update --check
@@ -68,45 +75,69 @@ python3 kit.py update --base /path/to/project
 python3 install.py uninstall --base /path/to/project --yes
 ```
 
-Omit `--base` to use your home directory. Updates require a clean checkout on
-main and fast-forward to a stable version tag. Pass each installation base to
-relink it, or rerun the installer there afterward. Skill preambles only check
-locally fetched tags, so ordinary skill use makes no update network request.
+Leave off `--base` and it uses your home directory.
 
-Uninstall removes matching installed links, the receipt, and empty directories
-the installer created. Changed links and user additions are preserved and
-reported. Your task artifacts and source checkout remain yours. Uninstall
-before moving or deleting the checkout. No shell profile or runtime config is
-edited, and no background service is installed.
+An update only runs on a clean checkout of the main branch. It only moves forward to a released version. Pass each place you installed to relink it. Or run the installer there again afterwards.
+
+Ordinary use does not check the network for an update. The skills read only version tags already on your disk.
+
+Uninstall removes the links it made. It removes the record of what it installed. It removes any empty folders it created. Anything you changed or added yourself is kept. It lists the files that stayed. Your working files and the cloned folder stay.
+
+Uninstall before you move or delete the cloned folder.
+
+It does not edit your shell profile or your agent config. It installs nothing that runs in the background.
 
 ## Measure your own usage
 
-```sh
+```
 python3 kit.py usage
 python3 kit.py usage /path/to/transcripts --json
 ```
 
-This read-only command counts distinct sessions that invoked skills by name.
-It never transmits anything or prints transcript contents. It deliberately
-undercounts implicit selection. See [counting rules](docs/usage.md).
+This is read-only. It sends nothing anywhere. It does not print what your transcripts say.
 
-## Loops and verification
+It counts how many separate sessions called a skill by typing its name.
 
-Ask loop-builder to prepare a small toy task first. Building a loop creates
-artifacts; running it is a separate action unless you requested both. The
-foreground runner supports both runtimes, checks proofs independently, keeps
-checkpoints, and stops on a blocker or budget limit. Read [loop contracts and
-permissions](docs/loops.md) before unattended use.
+It undercounts on purpose. When an agent picks a skill on its own, without you typing the name, that call is not counted.
 
-```sh
+See `docs/usage.md` for more.
+
+## Long unattended runs
+
+Ask `loop-builder` for a small throwaway task first.
+
+Setting up a run and starting it are two separate things. It will not start one unless you asked for that too.
+
+The runner works with both agents. It checks the results itself instead of taking the agent's word. It saves progress as it goes. It stops on a blocker or when it reaches the limit you set.
+
+Read `docs/loops.md` before you leave one running unattended.
+
+## Checking that the skills do what they say
+
+Every skill states one promise in a file next to it. The words match the table above.
+
+The checks beside the promise would catch it breaking that promise. At least one is a trap. The test sets up something the skill is supposed to refuse. It fails if the skill did it anyway. One example: `loop-builder` is asked to set up a run and stop. The check fails if the skill starts the run anyway.
+
+Adding a skill means adding its promise file next to it. You do not need to edit any test.
+
+Run these commands:
+
+```
+python3 promise.py list
 python3 -m unittest discover -s tests -v
+python3 plainlang.py
 ```
 
-Tests use Python's standard library and temporary directories. Live runtime
-verification requires your own authenticated CLIs and is documented in
-[verification](docs/verification.md).
+The tests use only what comes with Python. They write to temporary folders.
 
-MIT licensed, copyright Opascope. Packaging research included
-[gstack](https://github.com/garrytan/gstack); this package contains no copied
-gstack implementation or prose. Contributions should preserve the small scope,
-portable artifacts and dependency-free install.
+Checking against the real agents needs your own logged-in CLI. See `docs/verification.md` for that.
+
+`plainlang.py` is the gate on this file and on every skill name. It checks your wording. A contributor should know their wording will be checked.
+
+## License and credit
+
+MIT licensed, copyright Opascope.
+
+While working out how to package this, we looked at [gstack](https://github.com/garrytan/gstack). None of its code or writing appears here.
+
+Contributions should keep the package small. Keep the files readable on their own. Keep the install free of anything you have to install first.
