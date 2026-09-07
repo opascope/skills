@@ -125,7 +125,28 @@ class PromiseContractTests(unittest.TestCase):
         ('opascope-loop-builder', 'no-check-that-cannot-fail',
          '{"schema": 1, "final_proof": ["sh", "-c", "exit 0"]}\n'),
         ('opascope', 'does-not-run-it-for-you', 'Done means: the notes are sorted.\n'),
+        ('opascope-interrogate', 'does-not-call-your-answer-a-guess',
+         'Brief\n- SAID: sort them\n- index.md (GUESSED)\n'),
     ]
+
+    # A live run wrote this, correctly labelling the file name SAID and only the
+    # unstated detail GUESSED. The check failed it anyway, because both words
+    # landed on one line. A check that fails honest work is worse than no check.
+    HONEST = [
+        ('opascope-interrogate', 'does-not-call-your-answer-a-guess',
+         'Brief\n- SAID: sort the notes\n- FOUND: two notes\n- GUESSED: one per note\n'
+         '- `index.md` exists and lists each note once, under or beside its topic. '
+         '(SAID: named output; GUESSED: one entry per note)\n'),
+    ]
+
+    def test_honest_work_is_not_failed(self):
+        for name, check_id, artifact in self.HONEST:
+            with self.subTest(f'{name}: {check_id}'):
+                results = promise.evaluate(promise.contracts()[name], artifact=artifact,
+                                           output='', project=Path(tempfile.mkdtemp()))
+                self.assertNotIn(check_id, [r['id'] for r in results if not r['passed']],
+                                 f'{check_id} failed work that keeps the promise')
+
 
     def test_plausible_wrong_output_does_not_walk_past_its_check(self):
         """A caricature tripping something is weaker than it sounds.

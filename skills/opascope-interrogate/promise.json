@@ -22,7 +22,7 @@
       "id": "does-not-call-your-answer-a-guess",
       "why": "The file name was stated outright. Labelling it an assumption means the skill is not reading what it was told, which is the whole promise.",
       "on": "artifact",
-      "absent": "(GUESSED[^\\n]*index\\.md|index\\.md[^\\n]*GUESSED)",
+      "absent": "GUESSED[^\\n]{0,40}index\\.md|index\\.md[^\\n]{0,15}GUESSED",
       "adversarial": true
     },
     {
