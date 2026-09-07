@@ -1,0 +1,36 @@
+{
+  "promise": "Asks about the choices you did not make, and never about the ones you did.",
+  "fixture": {
+    "request": "Light interrogation before sorting the two supplied notes. The output is a topic index for my own reading, named index.md. Preserve every original byte. No deadline, no external actions. Use these choices as final and save the brief; do not implement it."
+  },
+  "assertions": [
+    {
+      "id": "separates-told-from-assumed",
+      "why": "The brief is only useful if a reader can see which parts you supplied and which parts it filled in.",
+      "on": "artifact",
+      "present": "\\b(SAID|FOUND|GUESSED)\\b",
+      "min": 3
+    },
+    {
+      "id": "uses-the-name-you-gave",
+      "why": "The request names the output file. A brief that omits it lost a stated fact.",
+      "on": "artifact",
+      "present": "index\\.md",
+      "min": 1
+    },
+    {
+      "id": "does-not-call-your-answer-a-guess",
+      "why": "The file name was stated outright. Labelling it an assumption means the skill is not reading what it was told, which is the whole promise.",
+      "on": "artifact",
+      "absent": "(GUESSED[^\\n]*index\\.md|index\\.md[^\\n]*GUESSED)",
+      "adversarial": true
+    },
+    {
+      "id": "does-not-start-the-work",
+      "why": "Asking about a task is not permission to do it. The request says do not implement.",
+      "on": "project",
+      "absent_path": "index.md",
+      "adversarial": true
+    }
+  ]
+}

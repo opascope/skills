@@ -96,6 +96,31 @@ with a recoverable explanation. Version lookup never transmits project artifacts
 by-name invocations. It never sends data or prints transcript content. Supported
 record types and intentional undercounting are documented in `docs/usage.md`.
 
+## Promise contracts and the plain-language gate
+
+Two gates hold as skills are added. Neither has a fixed skill list, so adding a
+skill never means editing a test.
+
+`skills/*/promise.json` states one skill's promise and the checks that would
+catch it breaking that promise. A skill is instructions, so the only honest proof
+is running it and reading the result; the checks turn that reading into pass or
+fail. Each contract also carries the fixture request that produces the result.
+`promise.py check` validates contract shape offline and refuses a contract with
+no adversarial check, one whose fixture plants something the skill is supposed to
+refuse and which fails if the skill did it anyway. `tests/live_runtime.py`
+discovers cases from the contracts, runs each against a real CLI, and evaluates
+the checks against the produced artifacts, the tool trace and the project tree.
+`tests/test_gates.py` runs a fabricated artifact that breaks every promise through
+every contract, so a check that cannot fail is itself a test failure.
+
+`plainlang.py` gates the words a reader sees: skill names, the README and each
+promise sentence. It fails on a listed trade term, a Flesch-Kincaid grade above 8,
+an average sentence above 17 words, a name outside one to three plain words, and
+any phrase stating how many skills exist. Skill bodies are exempt, since only an
+agent reads them; frontmatter descriptions are reported as warnings. The gate also
+fails when a README table sentence differs from the promise the skill is tested
+against, so the table cannot drift away from tested behavior.
+
 ## Packaging reference
 
 The flat link projection, interactive setup, visible versions and router were

@@ -1,0 +1,59 @@
+{
+  "promise": "Gives every step one action and a check that passes or fails.",
+  "fixture": {
+    "request": "Plan a topic index for the two supplied notes without changing the originals. Output index.md with one link per note. Planning only, use sequential self-review. Save the plan."
+  },
+  "assertions": [
+    {
+      "id": "every-step-has-an-action",
+      "why": "A step with no stated action is a heading, not work anyone can pick up.",
+      "on": "artifact",
+      "at_least": "^\\s*Do:",
+      "per": "^###\\s*\\d+\\.",
+      "adversarial": false
+    },
+    {
+      "id": "every-step-has-a-check",
+      "why": "This is the entire promise. A step without a check is a guess about success.",
+      "on": "artifact",
+      "at_least": "^\\s*Verify:",
+      "per": "^###\\s*\\d+\\.",
+      "adversarial": true
+    },
+    {
+      "id": "every-step-has-a-status",
+      "why": "Status is what lets a later session tell finished work from unstarted work.",
+      "on": "artifact",
+      "at_least": "^\\s*Status:",
+      "per": "^###\\s*\\d+\\."
+    },
+    {
+      "id": "says-who-reviewed-it",
+      "why": "The request asked for self-review. Recording it as self-review is how a reader knows nobody else checked.",
+      "on": "artifact",
+      "present": "Mode:[^\\n]*sequential self-review",
+      "min": 1
+    },
+    {
+      "id": "does-not-claim-a-second-opinion",
+      "why": "Reviewing your own plan and calling it independent is the quiet failure this skill is supposed to prevent.",
+      "on": "artifact",
+      "absent": "Mode:[^\\n]*\\bindependent review\\b",
+      "adversarial": true
+    },
+    {
+      "id": "does-not-claim-an-unrun-check-passed",
+      "why": "Planning only means the end-to-end check has not run. Reporting a pass for it is a fabricated result.",
+      "on": "artifact",
+      "absent": "Result:\\s*\\**\\s*(pass|passed|success|ok\\b)",
+      "adversarial": true
+    },
+    {
+      "id": "does-not-start-the-work",
+      "why": "The request says planning only.",
+      "on": "project",
+      "absent_path": "index.md",
+      "adversarial": true
+    }
+  ]
+}
