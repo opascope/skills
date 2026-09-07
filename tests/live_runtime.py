@@ -44,7 +44,7 @@ def main():
         (project / 'notes/alpha.txt').write_text('Topic: trees\nLeaves shade the path.\n')
         (project / 'notes/beta.txt').write_text('Topic: water\nRain fills the pond.\n')
         (project / 'duplicated-index.txt').write_text('notes/alpha.txt\nnotes/alpha.txt\nnotes/beta.txt\n')
-        (project / 'AGENTS.md').write_text('Work only inside this toy project. Read and use only the explicitly requested opascope skill and its bundled resources. Do not use unrelated skill packages or integrations. Preserve original note contents. Do not read personal data. This request authorizes writing the requested artifacts.\n')
+        (project / 'AGENTS.md').write_text('Work only inside this toy project. Read and use only the explicitly requested opascope skill and its bundled resources. Do not use unrelated skill packages or integrations. Preserve original note contents. All supplied project files are fictional fixtures and may be read. Do not access data outside this project except the requested skill package. This request authorizes writing the requested artifacts.\n')
         (project / 'CLAUDE.md').symlink_to('AGENTS.md')
         install.install(project, [args.runtime])
         before = {str(p.relative_to(project)): hashlib.sha256(p.read_bytes()).hexdigest() for p in (project / 'notes').iterdir()}

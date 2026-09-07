@@ -27,6 +27,11 @@ they need. `save` publishes an immutable timestamped markdown artifact from stdi
 The next session explicitly invokes the router or handoff skill to resume. We do
 not install startup hooks or change a project's agent instructions.
 
+Project identity paths are relative to their artifact location, so moving a
+project with its default artifacts preserves pickup. External artifact overrides
+must still resolve to the same owning project. Absolute pointers inside authored
+notes or sealed loop contracts may need a reviewed replacement after a move.
+
 Immutable publications use exclusive creation. Mutable loop checkpoints have one
 foreground writer, guarded by an exclusive lock. No database, daemon, telemetry,
 or background update process is involved. Artifacts may be committed deliberately;

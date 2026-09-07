@@ -67,3 +67,5 @@ COMPRESS, KEEP or QUESTION. Include a specific action, supporting evidence,
 impact and uncertainty. Impact is prospective, conditional on applying the
 recommendations. Never report projected savings as achieved. Return the report
 path and the most consequential finding; the user decides what to execute.
+Scale the report to the target. A few components usually need a compact table
+and brief counterarguments, not a long report repeating the inventory.

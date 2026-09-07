@@ -120,6 +120,16 @@ class InstallerTests(TemporaryTest):
 
 
 class ArtifactTests(TemporaryTest):
+    def test_project_move_preserves_pickup(self):
+        original = self.base / 'original'
+        original.mkdir()
+        task = kit.new_task(original, 'portable')
+        kit.save(task, 'handoff', 'resume the next action')
+        moved = self.base / 'moved'
+        original.rename(moved)
+        self.assertEqual(kit.resolve_task(moved, task.name).name, task.name)
+        self.assertEqual(kit.artifact_root(moved)[0], moved)
+
     def test_zero_config_non_git_nested_and_two_projects(self):
         a, b = self.base / 'a', self.base / 'b'
         a.mkdir(); b.mkdir()
@@ -173,6 +183,12 @@ class ArtifactTests(TemporaryTest):
 
 
 class MeasurementTests(TemporaryTest):
+    def test_catalog_filters_builtin_markup_and_unknown_prose(self):
+        record = {'type': 'user', 'message': {'content': '<command-name>/model</command-name> /copy /unknown $opascope-planning'}}
+        self.assertEqual(measurement.invocations(record, {'opascope-planning'}), {'opascope-planning'})
+        record = {'type': 'user', 'message': {'content': '/old-skill'}}
+        self.assertEqual(measurement.invocations(record, {'old-skill'}), {'old-skill'})
+
     def test_short_names_and_paths(self):
         record = {'type': 'user', 'message': {'content': '$planning /interrogate /help /tmp/file.py /a-file.md'}}
         self.assertEqual(measurement.invocations(record), {'planning', 'interrogate'})
