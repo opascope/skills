@@ -199,6 +199,14 @@ class ArtifactTests(TemporaryTest):
 
 
 class MeasurementTests(TemporaryTest):
+    def test_malformed_record_shapes_do_not_abort_scan(self):
+        rows = [{'type': 'user', 'message': None}, {'type': 'session_meta', 'payload': []},
+                {'type': 'user', 'message': {'content': '$opascope-planning'}}]
+        (self.base / 'shapes.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
+        result = measurement.measure([self.base])
+        self.assertEqual(result['malformed_lines'], 2)
+        self.assertEqual(result['ranking'], [{'skill': 'opascope-planning', 'sessions': 1}])
+
     def test_catalog_filters_builtin_markup_and_unknown_prose(self):
         record = {'type': 'user', 'message': {'content': '<command-name>/model</command-name> /copy /unknown $opascope-planning'}}
         self.assertEqual(measurement.invocations(record, {'opascope-planning'}), {'opascope-planning'})
