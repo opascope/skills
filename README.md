@@ -17,12 +17,12 @@ Useful agent workflows often have nothing to do with your domain.
 
 | Failure | Skill | What you get |
 |---|---|---|
-| Agent guessed instead of asking | `interrogate` | A brief labelling every claim SAID, FOUND, or GUESSED |
-| "Done" means nothing checkable | `define-done` | One sentence you can check as true or false: "This is solved when ..." |
-| Steps without verification | `planning` | Every step has one action and a check that passes or fails |
-| Context lost between sessions | `session-handoff` | A handoff with the exact next step and proof of what is already done |
-| Process nobody questions | `optimize` | A deletion-first audit that never edits its target |
-| Unattended runs that lie | `loop-builder` | A contract that checks its own proofs |
+| You wanted A. It confidently built B. | `interrogate` | A short list of its guesses, before it starts |
+| It says it made things better. Nothing changed. | `define-done` | One sentence that says exactly what finished looks like |
+| Step three is "make sure it works." How? | `planning` | Every step has an obvious pass or fail check |
+| You come back tomorrow. It forgot where it stopped. | `session-handoff` | A note the next session can pick up and continue |
+| Half of this is dead, and nobody dares delete it. | `optimize` | A keep-or-cut list with proof for every item that stays |
+| It ran all night and wrote three empty files. | `loop-builder` | A real finish line and a spending cap |
 
 ## Install
 
