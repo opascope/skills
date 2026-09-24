@@ -135,6 +135,8 @@ Files appear on first use in `.opascope-work/<task-id>/` inside your project. Yo
 
 They are markdown you can read. They hold notes for the next session, plans, and reports.
 
+Run `python3 kit.py start` to see your tasks and the next step. It changes nothing.
+
 The project root is the nearest ancestor containing `.opascope-skills.json`, `.opascope-work`, or `.git`. The package keeps no global current-task pointer. Two projects, or two tasks in one project, never overwrite each other. The work directory records its owning project and refuses use from a different one.
 
 To put them somewhere else, create `.opascope-skills.json` in your project root. Add `{"artifact_dir": "notes/agent-work"}`. The package reads no other keys from that file.
