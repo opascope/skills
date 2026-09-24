@@ -1,7 +1,7 @@
 {
   "promise": "Asks about the choices you did not make, and never about the ones you did.",
   "fixture": {
-    "request": "Light interrogation before sorting the two supplied notes. The output is a topic index for my own reading, named index.md. Preserve every original byte. No deadline, no external actions. One choice is still open: whether topic names stay exactly as the notes write them or change to lowercase. Ask me about that one in your final answer. Use every other choice as final and save the brief with the open question listed; do not implement it."
+    "request": "Light interrogation before sorting the two supplied notes. The output is a topic index for my own reading, named index.md, in the project root. Preserve every original byte. No deadline, no external actions. One choice is still open: whether topic names stay exactly as the notes write them or change to lowercase. Ask me about that one in your final answer. Use every other choice as final and save the brief with the open question listed; do not implement it."
   },
   "assertions": [
     {
