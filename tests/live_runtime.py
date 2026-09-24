@@ -69,6 +69,7 @@ def main():
         (project / 'notes').mkdir()
         seed = dict(SEED, **contract['fixture'].get('seed', {}))
         for relative, body in seed.items():
+            (project / relative).parent.mkdir(parents=True, exist_ok=True)
             (project / relative).write_text(body)
         (project / 'AGENTS.md').write_text('Work only inside this toy project. Read and use only the explicitly requested opascope skill and its bundled resources. Do not use unrelated skill packages or integrations. Preserve original note contents. All supplied project files are fictional fixtures and may be read. Do not access data outside this project except the requested skill package. This request authorizes writing the requested artifacts.\n')
         (project / 'CLAUDE.md').symlink_to('AGENTS.md')
@@ -91,7 +92,7 @@ def main():
             # The promise checks read what the run actually produced and what it
             # finally said. The full trace is retained beside them, but never
             # scored: it echoes the skill's own text and would pass every check.
-            checks = promise.evaluate(contract, promise.read_artifacts(project),
+            checks = promise.evaluate(contract, promise.read_artifacts(project, seed.keys()),
                                       final_text(output), project)
             preserved = all(hashlib.sha256((project / relative).read_bytes()).hexdigest() == digest
                             for relative, digest in before.items())

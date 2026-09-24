@@ -121,11 +121,18 @@ def evaluate(contract, artifact='', output='', project=None):
     return results
 
 
-def read_artifacts(project):
-    """Every text file a run left in the working directory, as one blob."""
+def read_artifacts(project, skip=()):
+    """Every text file a run left in the working directory, as one blob.
+
+    skip holds project-relative paths the fixture seeded, so a check never
+    credits the skill with text it was handed.
+    """
     work = Path(project) / '.opascope-work'
+    skip = set(skip)
     text = []
     for path in sorted(work.rglob('*')):
+        if path.relative_to(Path(project)).as_posix() in skip:
+            continue
         if path.is_file() and path.suffix in ('.md', '.json', '.txt'):
             try:
                 text.append(path.read_text())

@@ -280,6 +280,17 @@ class PromiseContractTests(unittest.TestCase):
             with self.subTest(path.parent.name):
                 json.loads(path.read_text())
 
+    def test_seeded_files_are_not_credited_to_the_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            task = project / '.opascope-work' / 'x'
+            task.mkdir(parents=True)
+            (task / 'brief-1.md').write_text('Also write sources.txt.\n')
+            (task / 'plan-1.md').write_text('Write index.md.\n')
+            seeded = '.opascope-work/x/brief-1.md'
+            self.assertNotIn('sources.txt', promise.read_artifacts(project, skip=[seeded]))
+            self.assertIn('sources.txt', promise.read_artifacts(project))
+
 
 class PlainLanguageTests(unittest.TestCase):
     def test_reader_facing_words_pass_the_gate(self):
