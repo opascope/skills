@@ -24,7 +24,9 @@ Task artifacts are markdown, with small JSON files for identity and executable
 loop contracts. `new` creates only a task identity file. Skills add the artifacts
 they need. `save` publishes an immutable timestamped markdown artifact from stdin;
 `resume` lists tasks and their latest handoff, or prints a selected task's handoff.
-The next session explicitly invokes the router or handoff skill to resume. We do
+Skills start with the read-only `start` command. It reports the package version
+from local tags, the project's tasks, the kinds each task has saved, and the next
+step. It never creates a file or folder. The next session explicitly invokes the router or handoff skill to resume. We do
 not install startup hooks or change a project's agent instructions.
 
 Project identity paths are relative to their artifact location, so moving a
@@ -86,10 +88,11 @@ be certified by the worker itself. See `docs/loops.md` for the contract and limi
 
 ## Updates and measurement
 
-The skill preamble performs an offline version check against locally fetched
-release tags. `update --check` explicitly queries the existing Git remote;
+The skill preamble's `start` command performs an offline version check against
+locally fetched release tags. `update --check` explicitly queries the existing Git remote;
 `update` fast-forwards a clean checkout to the newest stable version tag and reruns
-the installer for its existing receipts. Dirty, divergent and moved installs fail
+the installer for its existing receipts, then prints the CHANGELOG sections that
+are new since the old version. Dirty, divergent and moved installs fail
 with a recoverable explanation. Version lookup never transmits project artifacts.
 
 `usage` reads local transcript JSONL and counts distinct sessions with explicit

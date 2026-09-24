@@ -5,15 +5,19 @@ SKILL.md, using its full path. It is a link to the package's shared helper. Run
 commands from the user's project, not from the package directory. In commands
 below, replace KIT with that actual path; do not type KIT literally.
 
-1. Once per session, run `python3 "KIT" update --offline --check`. This reads
-   locally known release tags only. A failure must not block the user's task.
-   Mention an available update once; run a network update only when requested.
-2. Run `python3 "KIT" resume` to inspect existing task identities and handoffs.
-   Reuse the task ID already established in the conversation. For a new task, run
-   `python3 "KIT" new "short task title"`. It prints the full task directory.
-   Do not silently choose the newest unrelated task. When resuming, read that
-   task's latest handoff and its read-first artifacts before proceeding.
-3. Save each skill's artifact in that task directory. Use the runtime's file
+1. Run `python3 "KIT" start`. Add `--task TASK_ID` once the task is known.
+   It only reads and never creates files. Act on its lines:
+   - PACKAGE names a newer version: mention it once. Update only when asked.
+   - PROJECT is new: show the NEXT line as a one-line tip, then do what the
+     user asked. Never hold up their task for the tip.
+   - Several TASK lines and none named in this conversation: ask which one,
+     or start a new task. Never pick the newest one silently.
+   - Resuming a task after a break: open with a two-sentence recap of its
+     latest handoff, then suggest its NEXT step once.
+   For a new task, run `python3 "KIT" new "short task title"`. It prints the
+   full task directory. When resuming, read that task's latest handoff and
+   its read-first artifacts before proceeding.
+2. Save each skill's artifact in that task directory. Use the runtime's file
    editing tool for drafts. For an immutable final artifact, pass the draft's
    contents on stdin to `python3 "KIT" save TASK_ID KIND`. Example:
    `python3 "KIT" save notes-ab12cd34ef brief < "/full/task/path/brief-draft.md"`.

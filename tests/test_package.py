@@ -343,6 +343,89 @@ class LoopTests(TemporaryTest):
             loops.execute([sys.executable, '-c', 'import time; time.sleep(30)'], self.base, 0.05)
 
 
+class StartTests(TemporaryTest):
+    def start(self, task_id=None):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            kit.start(self.base, task_id)
+        return out.getvalue().splitlines()
+
+    def task(self, *kinds):
+        task = kit.new_task(self.base, 'Organize notes')
+        for kind in kinds:
+            kit.save(task, kind, kind + ' text')
+        return task
+
+    def test_new_project_creates_nothing(self):
+        lines = self.start()
+        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: opascope-interrogate'])
+        self.assertEqual(list(self.base.iterdir()), [])
+
+    def test_next_step_follows_what_is_saved(self):
+        cases = [((), 'opascope-interrogate'), (('brief',), 'opascope-define-done'),
+                 (('brief', 'objective'), 'opascope-planning'),
+                 (('brief', 'objective', 'plan'), 'do the work, or opascope-loop-builder to run it unattended'),
+                 (('plan', 'handoff'), 'follow the latest handoff')]
+        for kinds, expected in cases:
+            with self.subTest(kinds=kinds):
+                task = self.task(*kinds)
+                self.assertEqual(self.start(task.name)[-1], 'NEXT: ' + expected)
+
+    def test_sealed_loop_comes_before_plan(self):
+        task = self.task('plan')
+        (task / 'seal.json').write_text('{}')
+        self.assertEqual(self.start(task.name)[-1], 'NEXT: continue the sealed loop: kit.py loop run')
+
+    def test_handoff_only_wins_when_newest(self):
+        task = self.task('handoff', 'objective')
+        self.assertEqual(self.start(task.name)[-1], 'NEXT: opascope-planning')
+
+    def test_two_tasks_list_without_choosing(self):
+        first, second = self.task('brief'), self.task()
+        lines = self.start()
+        self.assertEqual(lines[1], 'PROJECT: known, 2 tasks')
+        tasks = [line for line in lines if line.startswith('TASK: ')]
+        self.assertEqual(len(tasks), 2)
+        self.assertEqual([t.split()[1] for t in tasks], sorted([first.name, second.name]))
+        self.assertFalse([line for line in lines if line.startswith(('SAVED:', 'NEXT:'))])
+
+    def test_task_detail_lists_saved_paths_oldest_first(self):
+        task = self.task('brief', 'objective')
+        saved = [line[7:] for line in self.start(task.name) if line.startswith('SAVED: ')]
+        self.assertEqual([Path(p).name.split('-')[0] for p in saved], ['brief', 'objective'])
+        self.assertTrue(all(Path(p).is_absolute() and Path(p).is_file() for p in saved))
+        self.assertIn('HANDOFF: none', self.start(task.name))
+
+    def test_optimization_alone_does_not_change_next(self):
+        task = self.task('optimization')
+        self.assertEqual(self.start(task.name)[-1], 'NEXT: opascope-interrogate')
+        self.assertIn('| saved: optimization |', self.start()[-1])
+
+    def test_newer_local_tag_is_reported(self):
+        local = tuple(map(int, (ROOT / 'VERSION').read_text().split('.')))
+        newer = (local[0], local[1] + 1, 0)
+        with patch.object(kit, 'local_versions', return_value=[local, newer]):
+            first = self.start()[0]
+        self.assertEqual(first, 'PACKAGE: %s, v%d.%d.%d available (update only when the user asks)' % (('.'.join(map(str, local)),) + newer))
+
+    def test_failed_version_lookup_still_reports(self):
+        with patch.object(kit, 'git', side_effect=subprocess.SubprocessError('no git')):
+            lines = self.start()
+        self.assertEqual(lines[0], 'PACKAGE: %s (update check unavailable)' % (ROOT / 'VERSION').read_text().strip())
+        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: opascope-interrogate'])
+
+    def test_owned_directory_without_tasks(self):
+        kit.artifact_root(self.base, create=True)
+        self.assertEqual(self.start()[1:], ['PROJECT: known, 0 tasks', 'NEXT: opascope-interrogate'])
+
+    def test_task_detail_names_latest_handoff(self):
+        task = self.task('brief', 'handoff')
+        handoff = next(task.glob('handoff-*.md'))
+        lines = self.start(task.name)
+        self.assertIn('HANDOFF: %s' % handoff, lines)
+        self.assertIn('SAVED: %s' % handoff, lines)
+        self.assertEqual(lines[-1], 'NEXT: follow the latest handoff')
+
+
 class PackageTests(unittest.TestCase):
     def test_every_skill_has_metadata_and_resolving_markdown_links(self):
         skills = list((ROOT / 'skills').glob('*/SKILL.md'))
