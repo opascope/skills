@@ -17,7 +17,11 @@ below, replace KIT with that actual path; do not type KIT literally.
    For a new task, run `python3 "KIT" new "short task title"`. It prints the
    full task directory. When resuming, read that task's latest handoff and
    its read-first artifacts before proceeding.
-2. Save each skill's artifact in that task directory. Use the runtime's file
+2. Before working on a task, run start with `--task TASK_ID` and read every
+   file it lists under SAVED. Treat their decisions and constraints as
+   settled. Ask only about what they leave open, and never ask again for
+   something they already answer.
+3. Save each skill's artifact in that task directory. Use the runtime's file
    editing tool for drafts. For an immutable final artifact, pass the draft's
    contents on stdin to `python3 "KIT" save TASK_ID KIND`. Example:
    `python3 "KIT" save notes-ab12cd34ef brief < "/full/task/path/brief-draft.md"`.
