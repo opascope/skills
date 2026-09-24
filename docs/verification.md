@@ -38,6 +38,30 @@ printed task path, the appropriate runtime, and a small iteration/time budget.
 Check that independent proofs initially fail, the runtime creates the output,
 the same proofs then pass, and rerunning needs no further runtime call.
 
+## 0.4.0 release results
+
+### Saved work carries forward
+
+Verified on Linux on 2026-09-24 with Claude Code 2.1.281 (model claude-opus-5-5)
+and Codex CLI 0.155.1 (its default model).
+
+- 69 standard-library automated tests passed.
+- Every skill plus the router ran for real on both runtimes. All 37 contract
+  checks held on each: 74 passing evaluations, with every fixture file
+  unchanged afterwards.
+- New check `carries-the-saved-brief`: the planning run continues a task whose
+  saved brief asks for `sources.txt`, a file the request never names. The
+  checker skips seeded files, so only the skill's own plan can pass it. It
+  passed on both runtimes.
+
+This proves a skill reads what the task already saved and carries it into its
+own work, rather than starting again from the request alone.
+
+The first codex round found two skills writing honest output in a shape their
+existing checks could not read. A brief put a stated file name on a line marked
+GUESSED, and an audit ruled on the planted file under a nickname instead of its
+path. Both skills now say how to write that line. Neither check was changed.
+
 ## 0.3.0 release results
 
 Verified on Linux on 2026-09-07 with Claude Code 2.1.263 and Codex CLI 0.153.4.

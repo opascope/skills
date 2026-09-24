@@ -23,6 +23,8 @@ its claims. A small task can have no material guesses; do not manufacture any.
 2. Draft goal, audience, constraints, non-goals and the first approach decisions.
    Mark each claim SAID (the user supplied it), FOUND (verified, with its source)
    or GUESSED (an assumption). A plausible inference is still GUESSED.
+   Give each label its own line. A GUESSED line states only the guess and
+   never repeats a SAID fact, such as a file name the user gave.
 3. For each guess: investigate if locally answerable; keep an explicit default
    if every plausible answer leads to the same work; otherwise queue a question.
    Order scope-changing questions before dependent details and taste choices.

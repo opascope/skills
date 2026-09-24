@@ -63,7 +63,8 @@ implemented path and must be labeled as such. Never require a team API.
 ## Report
 
 Use [references/report.md](references/report.md). Every component receives KILL,
-COMPRESS, KEEP or QUESTION. Include a specific action, supporting evidence,
+COMPRESS, KEEP or QUESTION. Write each verdict on one line that names the
+component by its path, never a short nickname. Include a specific action, supporting evidence,
 impact and uncertainty. Impact is prospective, conditional on applying the
 recommendations. Never report projected savings as achieved. Return the report
 path and the most consequential finding; the user decides what to execute.

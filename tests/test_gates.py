@@ -132,6 +132,14 @@ class PromiseContractTests(unittest.TestCase):
         ('opascope-planning', 'every-step-has-a-check',
          '### 1. A\nDo: a\nVerify: x\nVerify: y\nVerify: z\n'
          '### 2. B\nDo: b\n### 3. C\nDo: c\n'),
+        # A tidy plan that does everything the request said and nothing the saved
+        # brief added. The brief is the only place sources.txt appears.
+        ('opascope-planning', 'carries-the-saved-brief',
+         '### 1. Read both notes\nDo: read notes/alpha.txt and notes/beta.txt\n'
+         'Verify: both files open\nStatus: pending\n'
+         '### 2. Write the index\nDo: write index.md with one link per note\n'
+         'Verify: index.md lists each note exactly once\nStatus: pending\n'
+         'Mode: sequential self-review, not independent\n'),
     ]
 
     # A live run wrote this, correctly labelling the file name SAID and only the
@@ -226,6 +234,9 @@ class PromiseContractTests(unittest.TestCase):
             'Status: pending\n\n'
             '### 2. Write the index\nDo: write index.md with one link per note\n'
             'Verify: index.md lists each note exactly once\nStatus: pending\n\n'
+            '### 3. Write sources.txt\nDo: write sources.txt with both note paths, one per line\n'
+            'Verify: sources.txt has exactly two lines, each an existing note path\n'
+            'Status: pending\n\n'
             'Mode: sequential self-review, not independent\n', ''),
         'opascope-session-handoff': (
             'Current state: not started\n'
@@ -279,6 +290,17 @@ class PromiseContractTests(unittest.TestCase):
         for path in (ROOT / 'skills').glob('*/promise.json'):
             with self.subTest(path.parent.name):
                 json.loads(path.read_text())
+
+    def test_seeded_files_are_not_credited_to_the_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            task = project / '.opascope-work' / 'x'
+            task.mkdir(parents=True)
+            (task / 'brief-1.md').write_text('Also write sources.txt.\n')
+            (task / 'plan-1.md').write_text('Write index.md.\n')
+            seeded = '.opascope-work/x/brief-1.md'
+            self.assertNotIn('sources.txt', promise.read_artifacts(project, skip=[seeded]))
+            self.assertIn('sources.txt', promise.read_artifacts(project))
 
 
 class PlainLanguageTests(unittest.TestCase):
