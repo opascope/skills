@@ -1,7 +1,13 @@
 {
   "promise": "Gives every step one action and a check that passes or fails.",
   "fixture": {
-    "request": "Plan a topic index for the two supplied notes without changing the originals. Output index.md with one link per note. Planning only, use sequential self-review. Save the plan."
+    "request": "Continue task topic-index-seed000001: plan a topic index for the two supplied notes without changing the originals. Output index.md with one link per note. Planning only, use sequential self-review. Save the plan.",
+    "seed": {
+      ".opascope-work/.project.json": "{\"project\": \"..\", \"schema\": 1}",
+      ".opascope-work/topic-index-seed000001/task.json": "{\"title\": \"Topic index for two notes\", \"created\": \"20260923T090000000000Z\", \"project\": \"../..\"}",
+      ".opascope-work/topic-index-seed000001/objective-20260923T091500000000Z-5eed0002.md": "This is solved when index.md links each supplied note exactly once and every original note is byte-for-byte unchanged.\n",
+      ".opascope-work/topic-index-seed000001/brief-20260923T090000000000Z-5eed0001.md": "# Brief: topic index for two notes\n\nSAID: The output is index.md with one link per supplied note.\nSAID: The original notes stay unchanged.\nSAID: The work also writes sources.txt listing both note paths, one per line.\n"
+    }
   },
   "assertions": [
     {
@@ -60,6 +66,14 @@
       "why": "The request says planning only.",
       "on": "project",
       "absent_path": "index.md",
+      "adversarial": true
+    },
+    {
+      "id": "carries-the-saved-brief",
+      "why": "The saved brief asks for sources.txt and the request does not. A plan without it ignored work the task already settled.",
+      "on": "artifact",
+      "present": "sources\\.txt",
+      "min": 1,
       "adversarial": true
     }
   ]
