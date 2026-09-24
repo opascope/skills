@@ -183,6 +183,24 @@ def start(path, task_id=None):
         print(f'TASK: {task.name} "{title}" | saved: {", ".join(kinds) or "none"} | handoff: {handoffs[-1].name if handoffs else "none"} | next: {next_step(task, saved)}')
 
 
+def whats_new(old, new):
+    """CHANGELOG sections newer than old and no newer than new, newest first, verbatim."""
+    path = ROOT / 'CHANGELOG.md'
+    if not path.is_file():
+        return []
+    sections, current = [], None
+    for line in path.read_text().splitlines():
+        match = re.fullmatch(r'## (\d+)\.(\d+)\.(\d+)\b.*', line)
+        if match or line.startswith('## ') or line.startswith('# '):
+            current = [tuple(map(int, match.groups())), [line]] if match else None
+            if current:
+                sections.append(current)
+        elif current:
+            current[1].append(line)
+    chosen = [s for s in sections if old < s[0] <= new]
+    return ['\n'.join(lines).strip() for _, lines in sorted(chosen, key=lambda s: s[0], reverse=True)]
+
+
 def update(check=False, offline=False, bases=()):
     local = (ROOT / 'VERSION').read_text().strip()
     if offline:
@@ -229,6 +247,9 @@ def update(check=False, offline=False, bases=()):
         runtime = 'both' if len(runtimes) == 2 else runtimes[0]
         subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'], check=True)
     print(f'Updated to {tag}. Existing links follow the checkout. Re-run install.py for any other installation bases.')
+    notes = whats_new(current, latest)
+    if notes:
+        print("What's new:\n\n" + '\n\n'.join(notes))
 
 
 def main(argv=None):

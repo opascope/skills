@@ -33,6 +33,8 @@ class UpdateTests(unittest.TestCase):
         self.git(self.author, 'push', '-u', 'origin', 'main', '--tags')
         self.git(self.base, 'clone', '--branch', 'main', str(self.remote), str(self.reader))
         (self.author / 'VERSION').write_text('0.2.0\n')
+        (self.author / 'CHANGELOG.md').write_text('# Changelog\n\n## 0.2.0\n\n- The new thing.\n\n## 0.1.0\n\n- The first thing.\n')
+        self.git(self.author, 'add', 'CHANGELOG.md')
         self.git(self.author, 'commit', '-am', 'second')
         self.git(self.author, 'tag', 'v0.2.0')
         self.git(self.author, 'push', 'origin', 'main', '--tags')
@@ -49,6 +51,15 @@ class UpdateTests(unittest.TestCase):
             kit.update()
         self.assertEqual((self.reader / 'VERSION').read_text(), '0.2.0\n')
         self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), self.git(self.author, 'rev-parse', 'HEAD'))
+
+    def test_update_prints_whats_new(self):
+        with patch.object(kit, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()) as output:
+            kit.update()
+        text = output.getvalue()
+        self.assertIn("What's new:", text)
+        self.assertIn('- The new thing.', text)
+        self.assertNotIn('The first thing.', text)
+        self.assertNotIn('## 0.1.0', text)
 
     def test_dirty_checkout_preserved(self):
         (self.reader / 'personal.txt').write_text('uncommitted')
