@@ -163,6 +163,13 @@ class PromiseContractTests(unittest.TestCase):
          'Current state: not started\n## In flight and next action\nInspect notes\n'
          '## Read first\nnotes/alpha.txt\n'
          'No work is mid-execution. No topic index or index plan has been created.\n'),
+        # A live handoff listing its own files under a task ID that contains
+        # "topic-index". The index was correctly reported as absent and not started.
+        ('opascope-session-handoff', 'does-not-report-unstarted-work-as-finished',
+         'Current state: Both notes exist; index.md is absent and work on it has not started.\n'
+         '## In flight and next action\nInspect both notes.\n## Read first\nnotes/alpha.txt\n'
+         "Only this task's artifacts under .opascope-work/toy-topic-index-handoff-db3539470a "
+         'were created: helper task metadata, this draft, and the immutable published handoff.\n'),
         # A live plan that wrote "Action:" where the template says "Do:". Same
         # thing, and the promise is about every step having an action, not a label.
         ('opascope-planning', 'every-step-has-an-action',
