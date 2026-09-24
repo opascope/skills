@@ -111,17 +111,89 @@ def versions(text):
     return sorted({tuple(map(int, m)) for m in re.findall(r'(?:^|\s)(?:refs/tags/)?v(\d+)\.(\d+)\.(\d+)(?=\s|$)', text)})
 
 
+def local_versions():
+    """Release tags already in the package checkout, or None when Git cannot list them."""
+    try:
+        result = git('tag', '--list', 'v*', check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return None if result.returncode else versions(result.stdout)
+
+
+ARTIFACT = re.compile(r'([a-z][a-z0-9-]*)-(\d{8}T\d{12}Z)-[0-9a-f]{8}\.md')
+
+
+def artifacts(task):
+    """Saved artifacts of one task, oldest first, as (kind, path) pairs."""
+    found = [(m.group(2), m.group(1), p) for p in task.iterdir() for m in [ARTIFACT.fullmatch(p.name)] if m and p.is_file()]
+    return [(kind, p) for _, kind, p in sorted(found)]
+
+
+def next_step(task, saved):
+    kinds = {kind for kind, _ in saved if kind != 'optimization'}
+    notable = [kind for kind, _ in saved if kind != 'optimization']
+    if notable and notable[-1] == 'handoff':
+        return 'follow the latest handoff'
+    if (task / 'seal.json').exists():
+        return 'continue the sealed loop: kit.py loop run'
+    for kind, step in (('plan', 'do the work, or opascope-loop-builder to run it unattended'),
+                       ('objective', 'opascope-planning'), ('brief', 'opascope-define-done')):
+        if kind in kinds:
+            return step
+    return 'opascope-interrogate'
+
+
+def start(path, task_id=None):
+    """Report version, project, tasks and the next step. Reads only."""
+    _, root = artifact_root(path)
+    if task_id:
+        task = resolve_task(path, task_id)
+    local = (ROOT / 'VERSION').read_text().strip()
+    available = local_versions()
+    if available is None:
+        print(f'PACKAGE: {local} (update check unavailable)')
+    else:
+        current = tuple(map(int, local.split('.')))
+        newer = [v for v in available if v > current]
+        if newer:
+            print(f'PACKAGE: {local}, v{".".join(map(str, newer[-1]))} available (update only when the user asks)')
+        else:
+            print(f'PACKAGE: {local} (up to date)')
+    if not root.exists():
+        print('PROJECT: new\nNEXT: opascope-interrogate')
+        return
+    tasks = sorted((p.parent for p in root.glob('*/task.json') if not p.parent.is_symlink()), key=lambda p: p.name)
+    print(f'PROJECT: known, {len(tasks)} task{"" if len(tasks) == 1 else "s"}')
+    if task_id:
+        saved = artifacts(task)
+        handoffs = [p for kind, p in saved if kind == 'handoff']
+        print(f'TASK: {task.name} "{json.loads((task / "task.json").read_text())["title"]}"')
+        for _, p in saved:
+            print(f'SAVED: {p}')
+        print(f'HANDOFF: {handoffs[-1] if handoffs else "none"}')
+        print(f'NEXT: {next_step(task, saved)}')
+        return
+    if not tasks:
+        print('NEXT: opascope-interrogate')
+    for task in tasks:
+        saved = artifacts(task)
+        kinds = list(dict.fromkeys(kind for kind, _ in saved))
+        handoffs = [p for kind, p in saved if kind == 'handoff']
+        title = json.loads((task / 'task.json').read_text())['title']
+        print(f'TASK: {task.name} "{title}" | saved: {", ".join(kinds) or "none"} | handoff: {handoffs[-1].name if handoffs else "none"} | next: {next_step(task, saved)}')
+
+
 def update(check=False, offline=False, bases=()):
     local = (ROOT / 'VERSION').read_text().strip()
     if offline:
-        result = git('tag', '--list', 'v*', check=False)
+        available = local_versions()
+        if available is None:
+            return
     else:
         result = git('ls-remote', '--tags', '--refs', 'origin', check=False)
-    if result.returncode:
-        if not offline:
+        if result.returncode:
             raise ValueError('Version lookup unavailable. Check the remote and your Git authentication.')
-        return
-    available = versions(result.stdout)
+        available = versions(result.stdout)
     current = tuple(map(int, local.split('.')))
     latest = available[-1] if available else current
     if latest <= current:
@@ -174,6 +246,9 @@ def main(argv=None):
             p.add_argument('kind')
         if name == 'config':
             p.add_argument('--artifact-dir', help='Set the single project override; existing config is preserved on collision')
+    p = sub.add_parser('start', help='Report version, project, tasks and the next step; reads only')
+    p.add_argument('--project', type=Path, default=Path.cwd())
+    p.add_argument('--task')
     p = sub.add_parser('update')
     p.add_argument('--check', action='store_true')
     p.add_argument('--offline', action='store_true')
@@ -200,6 +275,8 @@ def main(argv=None):
                 json.dump({'artifact_dir': args.artifact_dir}, stream, indent=2)
                 stream.write('\n')
         print((base / CONFIG).read_text() if (base / CONFIG).exists() else json.dumps({'artifact_dir': DEFAULT_ARTIFACTS}))
+    elif args.command == 'start':
+        start(args.project, args.task)
     elif args.command == 'update':
         update(args.check, args.offline, args.base)
     elif args.command == 'usage':
