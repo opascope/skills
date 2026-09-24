@@ -125,7 +125,8 @@ python3 kit.py loop run /path/to/task --runtime codex  --steps 10 --seconds 300
 | Invocation | `/opascope-define-done` | `$opascope-define-done` |
 | Discovery path | `.claude/skills` | `.agents/skills` |
 | Loop adapter | `claude -p`, acceptEdits, Read/Write/Edit/Bash | `codex exec --sandbox workspace-write` |
-| Questions | Interactive question tool | Question tool, else numbered text with a real wait |
+| Questions | Interactive question tool | Question tool, else one fixed text shape with a recommendation |
+| Closing | A status line, then at most three lines | Same |
 
 Installation creates a real directory per skill containing links back to the source files. Frontmatter tool names describe capabilities; the host's permissions remain authoritative in both runtimes.
 

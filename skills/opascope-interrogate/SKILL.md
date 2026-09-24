@@ -4,8 +4,8 @@ description: Surface the guesses in a task before starting. Use when asked to in
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 metadata:
   portability:
-    claude: full; interactive questions or numbered text
-    codex: full; available question tool or numbered text with a real wait
+    claude: full; interactive questions or the fixed text shape
+    codex: full; available question tool or the fixed text shape with a real wait
 ---
 
 # Interrogate a request before an agent starts work
