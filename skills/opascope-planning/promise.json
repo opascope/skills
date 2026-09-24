@@ -75,6 +75,13 @@
       "present": "sources\\.txt",
       "min": 1,
       "adversarial": true
+    },
+    {
+      "id": "closes-with-a-status",
+      "why": "A run that does not close on Done, Blocked or Needs input leaves the reader to guess whether it finished.",
+      "on": "output",
+      "present": "^\\W*(?:Status:\\W*)?(Done|Done with concerns|Blocked|Needs input)\\b[^\\n]*(?:\\n+[^\\n]*){0,3}\\s*\\Z",
+      "min": 1
     }
   ]
 }

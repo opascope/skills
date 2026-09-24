@@ -65,8 +65,11 @@ do not restrict Codex. Instructions enforce the workflow's scope and the host's
 permissions remain authoritative.
 
 Questions use the host's interactive question tool when available, otherwise
-numbered text with lettered choices and a real wait. Plan review and optimization
-use separate sequential evidence and counterargument passes when independent
+one fixed text shape that states the stakes and a recommendation, then a real
+wait. Every skill closes with a status line and at most three lines after it,
+with any question above the status.
+Plan review and optimization use separate sequential evidence and
+counterargument passes when independent
 reviewers are unavailable. They label that review honestly. No review is silently
 skipped, and an existing user authorization is not replaced by a new approval gate.
 

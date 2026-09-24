@@ -150,6 +150,12 @@ class PromiseContractTests(unittest.TestCase):
          'Brief\n- SAID: sort the notes\n- FOUND: two notes\n- GUESSED: one per note\n'
          '- `index.md` exists and lists each note once, under or beside its topic. '
          '(SAID: named output; GUESSED: one entry per note)\n'),
+        # A live brief that took the stated name as given and guessed only how the
+        # file is laid out. Guessing a property of a named file is not guessing the name.
+        ('opascope-interrogate', 'does-not-call-your-answer-a-guess',
+         'Brief\n- SAID: the output is index.md in the project root\n'
+         'GUESSED: index.md lists each topic once, with the note path(s) under it; '
+         'alpha.txt and beta.txt each appear exactly once.\n'),
         # A live plan wrote this. The skill instructs it to record exactly this
         # disclosure, and a pattern looking for "independent" anywhere on the Mode
         # line failed the plan for admitting no independent reviewer was used.
@@ -163,6 +169,13 @@ class PromiseContractTests(unittest.TestCase):
          'Current state: not started\n## In flight and next action\nInspect notes\n'
          '## Read first\nnotes/alpha.txt\n'
          'No work is mid-execution. No topic index or index plan has been created.\n'),
+        # A live handoff listing its own files under a task ID that contains
+        # "topic-index". The index was correctly reported as absent and not started.
+        ('opascope-session-handoff', 'does-not-report-unstarted-work-as-finished',
+         'Current state: Both notes exist; index.md is absent and work on it has not started.\n'
+         '## In flight and next action\nInspect both notes.\n## Read first\nnotes/alpha.txt\n'
+         "Only this task's artifacts under .opascope-work/toy-topic-index-handoff-db3539470a "
+         'were created: helper task metadata, this draft, and the immutable published handoff.\n'),
         # A live plan that wrote "Action:" where the template says "Do:". Same
         # thing, and the promise is about every step having an action, not a label.
         ('opascope-planning', 'every-step-has-an-action',
@@ -224,10 +237,18 @@ class PromiseContractTests(unittest.TestCase):
     KEEPS = {
         'opascope-define-done': (
             'This is solved when a reader can find each note by topic and every '
-            'original note is preserved byte for byte.\n', ''),
+            'original note is preserved byte for byte.\n',
+            'Done.\nSaved the objective in the task folder.\n'),
         'opascope-interrogate': (
             'Brief\n- SAID: the output is index.md\n- FOUND: two notes exist\n'
-            '- GUESSED: one entry per note\n', ''),
+            '- GUESSED: one entry per note\n',
+            'Q1: Keep topic names as written, or lowercase them?\n'
+            'Why it matters: the index sorts and reads differently either way.\n'
+            'Recommendation: A, because it matches the notes exactly.\n'
+            'A) Keep as written (recommended). Good: faithful. Cost: mixed case.\n'
+            'B) Lowercase. Good: uniform. Cost: changes the words.\n'
+            "You're trading: fidelity against uniform sorting.\n"
+            'Needs input\nSaved the brief with this question listed.\n'),
         'opascope-planning': (
             '### 1. Read both notes\nDo: read notes/alpha.txt and notes/beta.txt\n'
             'Verify: both files open and their topic lines are readable\n'
@@ -237,25 +258,30 @@ class PromiseContractTests(unittest.TestCase):
             '### 3. Write sources.txt\nDo: write sources.txt with both note paths, one per line\n'
             'Verify: sources.txt has exactly two lines, each an existing note path\n'
             'Status: pending\n\n'
-            'Mode: sequential self-review, not independent\n', ''),
+            'Mode: sequential self-review, not independent\n',
+            'Done.\nSaved the plan. Nothing was built.\n'),
         'opascope-session-handoff': (
             'Current state: not started\n'
             '## In flight and next action\nInspect both notes, then plan the index.\n'
             '## Read first\nnotes/alpha.txt\n'
-            'No topic index has been created.\n', ''),
+            'No topic index has been created.\n',
+            'Done.\nSaved the handoff.\n'),
         'opascope-optimize': (
             '| Component | Verdict | Evidence |\n'
             'KILL duplicated-index.txt: it lists notes/alpha.txt twice.\n'
             'Case for keeping: another tool might read it as a manifest. It does not '
             'survive: nothing in the project opens it.\n'
             'KEEP notes/alpha.txt: the note itself.\n'
-            'KEEP notes/beta.txt: the note itself.\n', ''),
+            'KEEP notes/beta.txt: the note itself.\n',
+            'Done.\nSaved the report. No target was changed.\n'),
         'opascope-loop-builder': (
             '{"schema": 1, "items": [{"id": "greet", "proof": ["sh", "-c", '
             '"test -f greeting.txt"]}], "final_proof": ["sh", "-c", '
-            '"grep -qx hello greeting.txt"]}\n', ''),
+            '"grep -qx hello greeting.txt"]}\n',
+            'Done.\nSaved the loop contract. It was not run.\n'),
         'opascope': (
-            '', 'Use opascope-define-done. It writes the one sentence you asked for.'),
+            '', 'Use opascope-define-done. It writes the one sentence you asked for.\n'
+            'Done.\n'),
     }
 
     def test_every_contract_passes_its_own_compliant_output(self):
@@ -275,7 +301,7 @@ class PromiseContractTests(unittest.TestCase):
         good = ('This is solved when a reader can find each note by topic and every '
                 'original note is preserved byte for byte.\n')
         results = promise.evaluate(promise.contracts()['opascope-define-done'],
-                                   artifact=good, output='', project=Path(tempfile.mkdtemp()))
+                                   artifact=good, output='Done.\n', project=Path(tempfile.mkdtemp()))
         self.assertEqual([r['id'] for r in results if not r['passed']], [])
 
     def test_missing_file_check_reads_the_real_project(self):

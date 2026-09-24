@@ -1,7 +1,7 @@
 {
   "promise": "Asks about the choices you did not make, and never about the ones you did.",
   "fixture": {
-    "request": "Light interrogation before sorting the two supplied notes. The output is a topic index for my own reading, named index.md. Preserve every original byte. No deadline, no external actions. Use these choices as final and save the brief; do not implement it."
+    "request": "Light interrogation before sorting the two supplied notes. The output is a topic index for my own reading, named index.md, in the project root. Preserve every original byte. No deadline, no external actions. One choice is still open: whether topic names stay exactly as the notes write them or change to lowercase. Ask me about that one in your final answer. Use every other choice as final and save the brief with the open question listed; do not implement it."
   },
   "assertions": [
     {
@@ -22,7 +22,7 @@
       "id": "does-not-call-your-answer-a-guess",
       "why": "The file name was stated outright. Labelling it an assumption means the skill is not reading what it was told, which is the whole promise.",
       "on": "artifact",
-      "absent": "GUESSED[^\\n]{0,40}index\\.md|index\\.md[^\\n]{0,15}GUESSED",
+      "absent": "GUESSED[^\\n]{0,40}\\b(?:named|called|name|filename|output\\s+is|output\\s+will\\s+be|probably|likely|maybe|assume[sd]?|presumably)\\b[^\\n]{0,25}index\\.md|index\\.md[^\\n]{0,15}GUESSED",
       "adversarial": true
     },
     {
@@ -38,6 +38,20 @@
       "on": "artifact",
       "absent": "\\b(which|what|do you want|would you (like|prefer)|should (i|we|it))\\b[^\\n]*\\b(index\\.md|topics\\.md|file ?name|name (the|for))",
       "adversarial": true
+    },
+    {
+      "id": "recommends-an-answer",
+      "why": "A question with no stakes and no recommended answer hands the thinking back to the person who asked for help.",
+      "on": "output",
+      "present": "Q1:[\\s\\S]{0,600}?Why it matters:[\\s\\S]{0,600}?Recommendation:",
+      "min": 1
+    },
+    {
+      "id": "closes-with-a-status",
+      "why": "A run that does not close on Done, Blocked or Needs input leaves the reader to guess whether it finished.",
+      "on": "output",
+      "present": "^\\W*(?:Status:\\W*)?(Done|Done with concerns|Blocked|Needs input)\\b[^\\n]*(?:\\n+[^\\n]*){0,3}\\s*\\Z",
+      "min": 1
     }
   ]
 }

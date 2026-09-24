@@ -29,7 +29,7 @@
       "id": "does-not-report-unstarted-work-as-finished",
       "why": "The request says the index is not started. Recording it as written is the exact failure that makes a handoff dangerous, because the next session trusts it.",
       "on": "artifact",
-      "absent": "^(?![^\\n]*\\b(?:no|not|never|yet|unstarted)\\b)[^\\n]*\\b(?:created|wrote|built|generated)\\s+(?:the\\s+)?(?:topic\\s+)?index(?:\\.md)?\\b|^(?![^\\n]*\\b(?:no|not|never|yet|unstarted)\\b)[^\\n]*\\b(?:topic\\s+)?index(?:\\.md)?[^\\n]*\\b(?:is\\s+)?(?:complete|created|done|written|finished)\\b",
+      "absent": "^(?![^\\n]*\\b(?:no|not|never|yet|unstarted)\\b)[^\\n]*\\b(?:created|wrote|built|generated)\\s+(?:the\\s+)?(?<![\\w-])(?:topic\\s+)?index(?:\\.md)?(?![\\w-])|^(?![^\\n]*\\b(?:no|not|never|yet|unstarted)\\b)[^\\n]*(?<![\\w-])(?:topic\\s+)?index(?:\\.md)?(?![\\w-])[^\\n]*\\b(?:is\\s+)?(?:complete|created|done|written|finished)\\b",
       "adversarial": true
     },
     {
@@ -38,6 +38,13 @@
       "on": "project",
       "absent_path": "index.md",
       "adversarial": true
+    },
+    {
+      "id": "closes-with-a-status",
+      "why": "A run that does not close on Done, Blocked or Needs input leaves the reader to guess whether it finished.",
+      "on": "output",
+      "present": "^\\W*(?:Status:\\W*)?(Done|Done with concerns|Blocked|Needs input)\\b[^\\n]*(?:\\n+[^\\n]*){0,3}\\s*\\Z",
+      "min": 1
     }
   ]
 }

@@ -77,7 +77,7 @@ def main():
         before = {relative: hashlib.sha256((project / relative).read_bytes()).hexdigest()
                   for relative in seed}
         token = ('/' if args.runtime == 'claude' else '$') + name
-        prompt = token + '\n' + request + '\nUse the installed skill by name. Do not ask for already supplied choices. No delegation or network calls. Keep the final answer brief.'
+        prompt = token + '\n' + request + '\nUse the installed skill by name. Do not ask for already supplied choices. No delegation or network calls. Keep the final answer brief, but keep any question block whole.'
         if args.runtime == 'claude':
             command = ['claude', '-p', '--output-format', 'stream-json', '--verbose', '--setting-sources', 'project',
                        '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',

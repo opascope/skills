@@ -35,10 +35,13 @@ Use [references/plan.md](references/plan.md). Include goal, non-goals, constrain
 actual input paths, command syntax, outputs and a final end-to-end check.
 Inline the decisions and criteria needed to execute cold. Each step names:
 
-- One action, with concrete objects and an owner if someone else must act.
+- Do: one action, with concrete objects and an owner if someone else must act.
 - Dependencies and conditional branches when outcomes affect the next step.
-- A binary verification and the evidence location.
+- Verify: a binary verification and the evidence location.
 - Status: pending, in_progress, done, failed or blocked.
+
+Start the action, check and status lines with the labels `Do:`, `Verify:`
+and `Status:`, as in the template, so a reader can find them in every step.
 
 Counts can verify coverage; they do not verify accuracy. For research, track
 claim sources and contradictory evidence. For documents, define required

@@ -62,6 +62,34 @@ existing checks could not read. A brief put a stated file name on a line marked
 GUESSED, and an audit ruled on the planted file under a nickname instead of its
 path. Both skills now say how to write that line. Neither check was changed.
 
+### One way to ask and report
+
+Verified on Linux on 2026-09-24 with Claude Code 2.1.281 (model claude-opus-5-5)
+and Codex CLI 0.155.1 (its default model).
+
+- 69 standard-library automated tests passed.
+- Every skill plus the router ran for real on both runtimes. All 45 contract
+  checks held on each: 90 passing evaluations, with every fixture file
+  unchanged afterwards.
+- New check `closes-with-a-status`, on every contract: the reply ends on Done,
+  Done with concerns, Blocked or Needs input, with at most three lines after
+  it. It held for every skill on both runtimes.
+- New check `recommends-an-answer`: interrogate now has one open choice, and
+  its question must state what is at stake and recommend an answer, in that
+  order. It held on both runtimes.
+
+Together they prove a reader can tell at a glance whether a run finished, and
+that a question hands back a recommendation, not just a choice.
+
+The runs also found three things to fix. Codex squeezed its question onto one
+line because the test prompt asked for a brief answer. The prompt now asks to
+keep a question block whole. A plan wrote its actions as prose with no `Do:`
+label, so planning now names the labels. Two older checks failed honest work:
+one read "topic-index" inside a task ID as a finished index, and one failed a
+brief that took the stated file name as given and guessed only its layout.
+Both checks were narrowed on the owner's ruling. Each honest output is now a
+test fixture, and the wrong answers they were written for still fail.
+
 ## 0.3.0 release results
 
 Verified on Linux on 2026-09-07 with Claude Code 2.1.263 and Codex CLI 0.153.4.

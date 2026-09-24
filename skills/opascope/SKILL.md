@@ -24,7 +24,7 @@ Read [shared.md](shared.md) first. Route to the smallest useful workflow.
 For a vague request, identify what is actually missing: intent, outcome, path,
 continuity, necessity or persistence. Recommend one skill and explain why in
 one sentence. If the user asked for the work, load that skill and execute its
-instructions. If they only asked which skill fits, stop after the recommendation.
+instructions. If they only asked which skill fits, stop after the recommendation and its closing status line.
 Do not run the entire suite as a ritual.
 
 Claude Code can invoke a skill by its slash command or Skill tool. Codex can

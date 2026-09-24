@@ -40,12 +40,37 @@ the identical Python helper. Tool names in frontmatter describe capabilities;
 they do not override host permissions. Audit targets remain read-only under
 optimize, even though writing a report in the artifact directory is allowed.
 
-For a material unanswered question, use the runtime's interactive question tool
-if it works in this session. Otherwise ask numbered plain-text questions with
-lettered options, mark a recommended choice, and wait for the user's answer.
-Never invent an answer because a headless call cannot ask. Continue only work
-that is independent of the missing answer. If all relevant choices were already
-provided, use them without asking again.
+## Asking
+
+Ask only about a choice that changes the work. Use the runtime's question
+tool when it works in this session. Otherwise write the question in this
+shape and wait for the answer:
+
+    Q1: <the choice, in one line>
+    Why it matters: <what goes wrong if this is chosen badly>
+    Recommendation: <letter>, because <reason>
+    A) <option>. Good: <gain>. Cost: <loss>.
+    B) <option> (recommended). Good: <gain>. Cost: <loss>.
+    You're trading: <one line>
+
+Start each label on its own line, unnumbered, as shown.
+With the question tool, carry the same facts in the question and option
+text and mark the recommended option. Never invent an answer because a
+headless call cannot ask. Continue only work that does not depend on the
+missing answer. If every relevant choice was already provided, use it
+without asking again.
+
+## Reporting
+
+End with a status on its own line: Done, Done with concerns, Blocked, or
+Needs input. Write the bare word, with no number in front. Then at most
+three short lines: what changed (with the saved artifact path, if any),
+what was skipped, and what to watch. A reply that only recommends a skill
+still ends this way. Nothing comes after
+those lines. Anything longer that the skill must hand over, such as a
+question, a command block or a list of findings, goes above the status
+line. A claim that something
+cannot be done needs the exact error or a quick test behind it.
 
 Keep the user's scope and authorization. Defining a target, making a plan,
 auditing a process or preparing a loop does not by itself authorize executing
