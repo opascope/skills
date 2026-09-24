@@ -24,7 +24,9 @@ its claims. A small task can have no material guesses; do not manufacture any.
    Mark each claim SAID (the user supplied it), FOUND (verified, with its source)
    or GUESSED (an assumption). A plausible inference is still GUESSED.
    Give each label its own line. A GUESSED line states only the guess and
-   never repeats a SAID fact, such as a file name the user gave.
+   never repeats a SAID fact, such as a file name the user gave. If the user
+   named report.md, write "GUESSED: the output goes in the project root",
+   not "GUESSED: report.md goes in the project root".
 3. For each guess: investigate if locally answerable; keep an explicit default
    if every plausible answer leads to the same work; otherwise queue a question.
    Order scope-changing questions before dependent details and taste choices.
