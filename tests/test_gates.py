@@ -224,10 +224,18 @@ class PromiseContractTests(unittest.TestCase):
     KEEPS = {
         'opascope-define-done': (
             'This is solved when a reader can find each note by topic and every '
-            'original note is preserved byte for byte.\n', ''),
+            'original note is preserved byte for byte.\n',
+            'Done.\nSaved the objective in the task folder.\n'),
         'opascope-interrogate': (
             'Brief\n- SAID: the output is index.md\n- FOUND: two notes exist\n'
-            '- GUESSED: one entry per note\n', ''),
+            '- GUESSED: one entry per note\n',
+            'Q1: Keep topic names as written, or lowercase them?\n'
+            'Why it matters: the index sorts and reads differently either way.\n'
+            'Recommendation: A, because it matches the notes exactly.\n'
+            'A) Keep as written (recommended). Good: faithful. Cost: mixed case.\n'
+            'B) Lowercase. Good: uniform. Cost: changes the words.\n'
+            "You're trading: fidelity against uniform sorting.\n"
+            'Needs input\nSaved the brief with this question listed.\n'),
         'opascope-planning': (
             '### 1. Read both notes\nDo: read notes/alpha.txt and notes/beta.txt\n'
             'Verify: both files open and their topic lines are readable\n'
@@ -237,25 +245,30 @@ class PromiseContractTests(unittest.TestCase):
             '### 3. Write sources.txt\nDo: write sources.txt with both note paths, one per line\n'
             'Verify: sources.txt has exactly two lines, each an existing note path\n'
             'Status: pending\n\n'
-            'Mode: sequential self-review, not independent\n', ''),
+            'Mode: sequential self-review, not independent\n',
+            'Done.\nSaved the plan. Nothing was built.\n'),
         'opascope-session-handoff': (
             'Current state: not started\n'
             '## In flight and next action\nInspect both notes, then plan the index.\n'
             '## Read first\nnotes/alpha.txt\n'
-            'No topic index has been created.\n', ''),
+            'No topic index has been created.\n',
+            'Done.\nSaved the handoff.\n'),
         'opascope-optimize': (
             '| Component | Verdict | Evidence |\n'
             'KILL duplicated-index.txt: it lists notes/alpha.txt twice.\n'
             'Case for keeping: another tool might read it as a manifest. It does not '
             'survive: nothing in the project opens it.\n'
             'KEEP notes/alpha.txt: the note itself.\n'
-            'KEEP notes/beta.txt: the note itself.\n', ''),
+            'KEEP notes/beta.txt: the note itself.\n',
+            'Done.\nSaved the report. No target was changed.\n'),
         'opascope-loop-builder': (
             '{"schema": 1, "items": [{"id": "greet", "proof": ["sh", "-c", '
             '"test -f greeting.txt"]}], "final_proof": ["sh", "-c", '
-            '"grep -qx hello greeting.txt"]}\n', ''),
+            '"grep -qx hello greeting.txt"]}\n',
+            'Done.\nSaved the loop contract. It was not run.\n'),
         'opascope': (
-            '', 'Use opascope-define-done. It writes the one sentence you asked for.'),
+            '', 'Use opascope-define-done. It writes the one sentence you asked for.\n'
+            'Done.\n'),
     }
 
     def test_every_contract_passes_its_own_compliant_output(self):
@@ -275,7 +288,7 @@ class PromiseContractTests(unittest.TestCase):
         good = ('This is solved when a reader can find each note by topic and every '
                 'original note is preserved byte for byte.\n')
         results = promise.evaluate(promise.contracts()['opascope-define-done'],
-                                   artifact=good, output='', project=Path(tempfile.mkdtemp()))
+                                   artifact=good, output='Done.\n', project=Path(tempfile.mkdtemp()))
         self.assertEqual([r['id'] for r in results if not r['passed']], [])
 
     def test_missing_file_check_reads_the_real_project(self):
