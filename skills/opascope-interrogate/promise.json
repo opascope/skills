@@ -1,7 +1,7 @@
 {
   "promise": "Asks about the choices you did not make, and never about the ones you did.",
   "fixture": {
-    "request": "Light interrogation before sorting the two supplied notes. The output is a topic index for my own reading, named index.md. Preserve every original byte. No deadline, no external actions. Use these choices as final and save the brief; do not implement it."
+    "request": "Light interrogation before sorting the two supplied notes. The output is a topic index for my own reading, named index.md. Preserve every original byte. No deadline, no external actions. One choice is still open: whether topic names stay exactly as the notes write them or change to lowercase. Ask me about that one in your final answer. Use every other choice as final and save the brief with the open question listed; do not implement it."
   },
   "assertions": [
     {
@@ -38,6 +38,13 @@
       "on": "artifact",
       "absent": "\\b(which|what|do you want|would you (like|prefer)|should (i|we|it))\\b[^\\n]*\\b(index\\.md|topics\\.md|file ?name|name (the|for))",
       "adversarial": true
+    },
+    {
+      "id": "recommends-an-answer",
+      "why": "A question with no stakes and no recommended answer hands the thinking back to the person who asked for help.",
+      "on": "output",
+      "present": "Q1:[\\s\\S]{0,600}?Why it matters:[\\s\\S]{0,600}?Recommendation:",
+      "min": 1
     }
   ]
 }
