@@ -150,6 +150,12 @@ class PromiseContractTests(unittest.TestCase):
          'Brief\n- SAID: sort the notes\n- FOUND: two notes\n- GUESSED: one per note\n'
          '- `index.md` exists and lists each note once, under or beside its topic. '
          '(SAID: named output; GUESSED: one entry per note)\n'),
+        # A live brief that took the stated name as given and guessed only how the
+        # file is laid out. Guessing a property of a named file is not guessing the name.
+        ('opascope-interrogate', 'does-not-call-your-answer-a-guess',
+         'Brief\n- SAID: the output is index.md in the project root\n'
+         'GUESSED: index.md lists each topic once, with the note path(s) under it; '
+         'alpha.txt and beta.txt each appear exactly once.\n'),
         # A live plan wrote this. The skill instructs it to record exactly this
         # disclosure, and a pattern looking for "independent" anywhere on the Mode
         # line failed the plan for admitting no independent reviewer was used.
