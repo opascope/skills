@@ -10,6 +10,9 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'lib'))
+import install
+import json
 import kit
 
 
@@ -87,6 +90,28 @@ class UpdateTests(unittest.TestCase):
                 kit.update()
         self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), before)
 
+
+    def test_update_refreshes_every_listed_install(self):
+        bases = [self.base / 'home', self.base / 'project']
+        for base in bases:
+            base.mkdir()
+            (base / install.RECEIPT).write_text(json.dumps({
+                'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+                'runtimes': ['claude'], 'links': {}, 'directories': []}))
+        (self.reader / install.INDEX).write_text(json.dumps({'bases': [str(bases[1].resolve())]}))
+        with (self.reader / '.git/info/exclude').open('a') as stream:
+            stream.write(install.INDEX + '\n')
+        calls = []
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if str(command[1]).endswith('install.py'):
+                calls.append(command[command.index('--base') + 1])
+                return subprocess.CompletedProcess(command, 0)
+            return real_run(command, *args, **kwargs)
+        with patch.object(kit, 'ROOT', self.reader), patch.object(Path, 'home', return_value=bases[0]), \
+                patch.object(kit.subprocess, 'run', run), contextlib.redirect_stdout(io.StringIO()):
+            kit.update()
+        self.assertEqual(sorted(calls), sorted(str(b.resolve()) for b in bases))
 
 if __name__ == '__main__':
     unittest.main()

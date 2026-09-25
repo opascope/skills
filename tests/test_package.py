@@ -32,6 +32,13 @@ class TemporaryTest(unittest.TestCase):
         self.output = contextlib.redirect_stdout(io.StringIO())
         self.output.__enter__()
         self.addCleanup(self.output.__exit__, None, None, None)
+        # Keep the install list out of the real checkout and out of the snapshots.
+        lists = tempfile.TemporaryDirectory(prefix='skill-list-')
+        self.addCleanup(lists.cleanup)
+        self.index = Path(lists.name) / install.INDEX
+        listing = patch.object(install, 'index_path', lambda root=None: self.index)
+        listing.start()
+        self.addCleanup(listing.stop)
 
 
 class InstallerTests(TemporaryTest):
@@ -206,6 +213,57 @@ class InstallerTests(TemporaryTest):
             with self.assertRaises(OSError):
                 install.install(self.base, ['codex'])
         self.assertEqual(snapshot(self.base), before)
+
+    def status(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            install.main(['status', *argv])
+        return json.loads(output.getvalue())
+
+    def test_project_install_shows_in_status_from_anywhere(self):
+        project = self.base / 'project'
+        project.mkdir()
+        install.install(project, ['claude'])
+        with patch.object(Path, 'home', return_value=self.base / 'elsewhere'):
+            report = self.status()
+        self.assertTrue(report['installed'])
+        self.assertEqual(report['installs'], [{'base': str(project.resolve()), 'runtimes': ['claude']}])
+
+    def test_uninstall_drops_off_the_list(self):
+        install.install(self.base, ['codex'])
+        self.assertEqual(install.read_index(), [str(self.base.resolve())])
+        install.uninstall(self.base)
+        self.assertEqual(install.read_index(), [])
+        with patch.object(Path, 'home', return_value=self.base):
+            report = self.status()
+        self.assertFalse(report['installed'])
+        self.assertIn('Not installed anywhere', report['note'])
+
+    def test_listed_base_without_receipt_is_stale(self):
+        gone = str(self.base / 'deleted-project')
+        install.write_index([gone])
+        with patch.object(Path, 'home', return_value=self.base):
+            report = self.status()
+        self.assertFalse(report['installed'])
+        self.assertEqual(report['stale'], [gone])
+
+    def test_install_inside_the_checkout_is_refused(self):
+        package = self.base / 'package'
+        (package / 'project').mkdir(parents=True)
+        before = snapshot(self.base)
+        with patch.object(install, 'ROOT', package):
+            for base in (package, package / 'project'):
+                with self.assertRaisesRegex(ValueError, 'inside the package checkout'):
+                    install.install(base, ['claude'])
+        self.assertEqual(snapshot(self.base), before)
+        self.assertEqual(install.read_index(), [])
+
+    def test_install_made_before_the_list_is_found_and_added(self):
+        install.install(self.base, ['codex'])
+        self.index.unlink()
+        with patch.object(Path, 'home', return_value=self.base):
+            report = self.status()
+        self.assertTrue(report['installed'])
+        self.assertEqual(install.read_index(), [str(self.base.resolve())])
 
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):

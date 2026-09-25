@@ -11,6 +11,7 @@ import uuid
 ROOT = Path(__file__).resolve().parent
 RECEIPT = '.opascope-skills-install.json'
 LOCK = '.opascope-skills-install.lock'
+INDEX = '.opascope-skills-installs.json'
 LOCATIONS = {'claude': Path('.claude/skills'), 'codex': Path('.agents/skills')}
 
 
@@ -48,6 +49,56 @@ def locked(base):
         lock.unlink()
 
 
+def index_path(root=None):
+    """Where a checkout lists the bases it is installed in. The receipts stay the proof."""
+    return (root or ROOT) / INDEX
+
+
+def read_index(root=None):
+    try:
+        bases = json.loads(index_path(root).read_text()).get('bases', [])
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [b for b in bases if isinstance(b, str)]
+
+
+def write_index(bases, root=None):
+    path = index_path(root)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex)
+    try:
+        with temporary.open('x') as stream:
+            json.dump({'bases': sorted(set(bases))}, stream, indent=2)
+            stream.write('\n')
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def installed_bases(root=None):
+    """Bases holding a receipt from this checkout, and listed bases that no longer do.
+
+    Home and the current directory are also checked, so installs made before the
+    list existed are found and added to it.
+    """
+    root = root or ROOT
+    listed = read_index(root)
+    found, stale = [], []
+    for candidate in dict.fromkeys(listed + [str(Path.home()), str(Path.cwd())]):
+        try:
+            base = Path(candidate).resolve()
+            receipt = read_receipt(base)
+        except (OSError, ValueError, KeyError):
+            receipt = None
+        if receipt and receipt.get('source') == str(root):
+            found.append((str(base), receipt))
+        elif candidate in listed:
+            stale.append(candidate)
+    if any(base not in listed for base, _ in found):
+        write_index(listed + [base for base, _ in found], root)
+    return found, stale
+
+
 def matching_link(path, target):
     return path.is_symlink() and os.readlink(path) == target
 
@@ -70,6 +121,9 @@ def desired_links(base, runtimes):
 
 def install(base, runtimes):
     base = base.resolve(strict=True)
+    if base == ROOT or ROOT in base.parents:
+        raise ValueError(f'Refusing to install inside the package checkout: {base}. '
+                         'It would block updates. Choose your home or another project.')
     with locked(base):
         prior = read_receipt(base)
         if prior and prior['source'] != str(ROOT):
@@ -165,6 +219,7 @@ def install(base, runtimes):
                 json.dump(receipt, stream, indent=2)
                 stream.write('\n')
             temporary.replace(base / RECEIPT)
+    write_index(read_index() + [str(base)])
     print(f'Installed {len(desired)} links for {", ".join(runtimes)} in {base}')
     print('Open a new session. Claude Code: /opascope | Codex: $opascope')
     print('Try: define done for sorting a folder of notes without losing any.')
@@ -176,6 +231,7 @@ def uninstall(base):
     with locked(base):
         receipt = read_receipt(base)
         if not receipt:
+            write_index([b for b in read_index() if b != str(base)])
             print('Nothing installed here.')
             return
         preserved = []
@@ -204,6 +260,7 @@ def uninstall(base):
             except OSError:
                 preserved.append(relative)
         (base / RECEIPT).unlink()
+        write_index([b for b in read_index() if b != str(base)])
     print('Removed installed links, receipt and empty directories created by the installer.')
     print('Source checkout and task artifacts retained.')
     if preserved:
@@ -239,13 +296,23 @@ def main(argv=None):
                 return 0
         except EOFError:
             raise ValueError('No interactive input. Re-run with --yes and optional --runtime/--base.')
+    if args.action == 'status' and base is None:
+        found, stale = installed_bases()
+        report = {'installed': bool(found),
+                  'installs': [{'base': b, 'runtimes': r.get('runtimes', [])} for b, r in found]}
+        if stale:
+            report['stale'] = stale
+        if not found:
+            report['note'] = 'Not installed anywhere from this checkout.'
+        print(json.dumps(report, indent=2))
+        return 0
     base = (base or Path.home()).expanduser()
     if args.action == 'install':
         install(base, ['claude', 'codex'] if (runtime or 'both') == 'both' else [runtime])
     elif args.action == 'uninstall':
         uninstall(base)
     else:
-        print(json.dumps(read_receipt(base) or {'installed': False}, indent=2))
+        print(json.dumps(read_receipt(base) or {'installed': False, 'base': str(base.resolve())}, indent=2))
     return 0
 
 

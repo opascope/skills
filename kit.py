@@ -230,9 +230,7 @@ def update(check=False, offline=False, bases=()):
         raise ValueError('Update requires the main branch. Feature and detached checkouts are not changed.')
     import install
     if not bases:
-        receipt = install.read_receipt(Path.home())
-        if receipt and receipt['source'] == str(ROOT):
-            bases = [Path.home()]
+        bases = [Path(base) for base, _ in install.installed_bases(ROOT)[0]]
     for base in bases:
         receipt = install.read_receipt(Path(base))
         if not receipt or receipt['source'] != str(ROOT):
@@ -247,7 +245,7 @@ def update(check=False, offline=False, bases=()):
         runtimes = receipt['runtimes']
         runtime = 'both' if len(runtimes) == 2 else runtimes[0]
         subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'], check=True)
-    print(f'Updated to {tag}. Existing links follow the checkout. Re-run install.py for any other installation bases.')
+    print(f'Updated to {tag}. Every installation this checkout knows about was refreshed.')
     notes = whats_new(current, latest)
     if notes:
         print("What's new:\n\n" + '\n\n'.join(notes))

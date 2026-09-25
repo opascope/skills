@@ -3,3 +3,7 @@ __pycache__/
 .opascope-work/
 .opascope-skills-install.json
 .opascope-skills-install.lock
+.opascope-skills-installs.json
+.opascope-skills-installs.json.*
+.claude/
+.agents/
