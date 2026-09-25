@@ -6,11 +6,14 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
+import time
 import uuid
 
 ROOT = Path(__file__).resolve().parent
 RECEIPT = '.opascope-skills-install.json'
 LOCK = '.opascope-skills-install.lock'
+INDEX = '.opascope-skills-installs.json'
 LOCATIONS = {'claude': Path('.claude/skills'), 'codex': Path('.agents/skills')}
 
 
@@ -48,6 +51,136 @@ def locked(base):
         lock.unlink()
 
 
+def index_path(root=None):
+    """Where a checkout lists the bases it is installed in. The receipts stay the proof."""
+    return (root or ROOT) / INDEX
+
+
+def read_index(root=None):
+    """The listed bases. Refuses a file this package did not write, so it is never replaced."""
+    path = index_path(root)
+    if not exists(path):
+        return []
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError
+        data = json.loads(path.read_text())
+        if data.get('package') != 'opascope-skills' or data.get('schema') != 1 or \
+                not isinstance(data.get('bases'), list) or \
+                not all(isinstance(b, str) for b in data['bases']):
+            raise ValueError
+    except (OSError, ValueError, AttributeError):
+        raise ValueError(f'Unrecognized install list, left unchanged: {path}')
+    return data['bases']
+
+
+def write_index(bases, root=None):
+    path = index_path(root)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex)
+    try:
+        with temporary.open('x') as stream:
+            json.dump({'package': 'opascope-skills', 'schema': 1, 'bases': sorted(set(bases))}, stream, indent=2)
+            stream.write('\n')
+        temporary.replace(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+_HELD = threading.local()
+
+
+@contextmanager
+def checkout_locked(root=None):
+    """One install, uninstall or update at a time per checkout, for the whole operation.
+
+    Reentrant in this process, and inherited by installers an update starts.
+    A checkout that cannot hold a lock file cannot hold the list either, so it
+    proceeds unlocked and the list stays as it is.
+    """
+    lock = index_path(root).with_name(INDEX + '.lock')
+    held = _HELD.__dict__.setdefault('locks', [])
+    if str(lock) in held or os.environ.get('OPASCOPE_CHECKOUT_LOCKED') == str(lock):
+        yield
+        return
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            break
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                raise ValueError(f'Another install, uninstall or update is running: {lock}. '
+                                 'If interrupted, inspect it before removing the lock.')
+            time.sleep(0.05)
+        except OSError:
+            yield
+            return
+    os.close(fd)
+    held.append(str(lock))
+    try:
+        yield
+    finally:
+        held.remove(str(lock))
+        lock.unlink()
+
+
+def change_index(add=(), remove=(), root=None):
+    with checkout_locked(root):
+        bases = [b for b in read_index(root) if b not in remove]
+        write_index(bases + list(add), root)
+
+
+def record(add=(), remove=()):
+    """Update the list after a base changed. The base is already done, so never fail it."""
+    try:
+        change_index(add=add, remove=remove)
+    except (OSError, ValueError) as exc:
+        print(f'Note: could not update the install list ({exc}). '
+              'status still finds installs in your home or current folder.')
+
+
+def installed_bases(root=None):
+    """Bases holding a receipt from this checkout, and listed bases that no longer do.
+
+    Home and the current directory are also checked, so installs made before the
+    list existed are found and added to it.
+    """
+    root = root or ROOT
+    try:
+        listed, usable = read_index(root), True
+    except ValueError:
+        listed, usable = [], False
+    found, stale, seen = [], [], set()
+    for candidate in listed + [str(Path.home()), str(Path.cwd())]:
+        # Compare resolved paths, so a symlinked home is not counted twice.
+        try:
+            base = Path(candidate).resolve()
+        except (OSError, RuntimeError):
+            continue
+        if str(base) in seen:
+            continue
+        seen.add(str(base))
+        try:
+            receipt = read_receipt(base)
+        except (OSError, ValueError, KeyError):
+            receipt = None
+        if receipt and receipt.get('source') == str(root):
+            found.append((str(base), receipt))
+        elif candidate in listed:
+            stale.append(candidate)
+    if usable and any(base not in listed for base, _ in found):
+        try:
+            with checkout_locked(root):
+                # Check again under the lock, so a base uninstalled meanwhile is not re-added.
+                add = [base for base, _ in found if base not in listed and
+                       (read_receipt(Path(base)) or {}).get('source') == str(root)]
+                change_index(add=add, root=root)
+        except (OSError, ValueError, KeyError):
+            pass  # Reporting what exists matters more than recording it.
+    return found, stale
+
+
 def matching_link(path, target):
     return path.is_symlink() and os.readlink(path) == target
 
@@ -70,7 +203,10 @@ def desired_links(base, runtimes):
 
 def install(base, runtimes):
     base = base.resolve(strict=True)
-    with locked(base):
+    if base == ROOT or ROOT in base.parents:
+        raise ValueError(f'Refusing to install inside the package checkout: {base}. '
+                         'It would block updates. Choose your home or another project.')
+    with checkout_locked(), locked(base):
         prior = read_receipt(base)
         if prior and prior['source'] != str(ROOT):
             raise ValueError('This base belongs to a different checkout. Uninstall that checkout first.')
@@ -165,6 +301,8 @@ def install(base, runtimes):
                 json.dump(receipt, stream, indent=2)
                 stream.write('\n')
             temporary.replace(base / RECEIPT)
+        # Still under the base lock, so a racing uninstall cannot be undone by this entry.
+        record(add=[str(base)])
     print(f'Installed {len(desired)} links for {", ".join(runtimes)} in {base}')
     print('Open a new session. Claude Code: /opascope | Codex: $opascope')
     print('Try: define done for sorting a folder of notes without losing any.')
@@ -173,9 +311,10 @@ def install(base, runtimes):
 
 def uninstall(base):
     base = base.resolve(strict=True)
-    with locked(base):
+    with checkout_locked(), locked(base):
         receipt = read_receipt(base)
         if not receipt:
+            record(remove=[str(base)])
             print('Nothing installed here.')
             return
         preserved = []
@@ -204,6 +343,7 @@ def uninstall(base):
             except OSError:
                 preserved.append(relative)
         (base / RECEIPT).unlink()
+        record(remove=[str(base)])
     print('Removed installed links, receipt and empty directories created by the installer.')
     print('Source checkout and task artifacts retained.')
     if preserved:
@@ -212,13 +352,19 @@ def uninstall(base):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['install', 'uninstall', 'status'], nargs='?', default='install')
+    parser.add_argument('action', choices=['install', 'uninstall', 'status', 'forget'], nargs='?', default='install')
     parser.add_argument('--runtime', choices=['claude', 'codex', 'both'])
     parser.add_argument('--base', type=Path, help='Home directory for global install, or project directory for local install')
     parser.add_argument('--yes', action='store_true', help='Use explicit flags or defaults without prompts')
     args = parser.parse_args(argv)
     base = args.base
     runtime = args.runtime
+    if args.action == 'forget':
+        if base is None:
+            raise ValueError('Name the place to forget with --base.')
+        change_index(remove=[str(base.expanduser().resolve())])
+        print(f'Forgot {base}. Nothing there was changed.')
+        return 0
     if not args.yes and args.action != 'status':
         print('Opascope Skills | six work skills, one router, no build step')
         print('Installation creates links back to this checkout. Keep the checkout in place.')
@@ -239,13 +385,27 @@ def main(argv=None):
                 return 0
         except EOFError:
             raise ValueError('No interactive input. Re-run with --yes and optional --runtime/--base.')
+    if args.action == 'status' and base is None:
+        found, stale = installed_bases()
+        report = {'installed': bool(found),
+                  'installs': [{'base': b, 'runtimes': r.get('runtimes', [])} for b, r in found]}
+        if stale:
+            report['stale'] = stale
+        try:
+            read_index()
+        except ValueError as exc:
+            report['problem'] = f'{exc}. Only your home and current folder were checked.'
+        if not found:
+            report['note'] = 'Not installed anywhere from this checkout.'
+        print(json.dumps(report, indent=2))
+        return 0
     base = (base or Path.home()).expanduser()
     if args.action == 'install':
         install(base, ['claude', 'codex'] if (runtime or 'both') == 'both' else [runtime])
     elif args.action == 'uninstall':
         uninstall(base)
     else:
-        print(json.dumps(read_receipt(base) or {'installed': False}, indent=2))
+        print(json.dumps(read_receipt(base) or {'installed': False, 'base': str(base.resolve())}, indent=2))
     return 0
 
 

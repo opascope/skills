@@ -10,6 +10,9 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'lib'))
+import install
+import json
 import kit
 
 
@@ -87,6 +90,116 @@ class UpdateTests(unittest.TestCase):
                 kit.update()
         self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), before)
 
+
+    def test_update_refreshes_every_listed_install(self):
+        bases = [self.base / 'home', self.base / 'project']
+        for base in bases:
+            base.mkdir()
+            (base / install.RECEIPT).write_text(json.dumps({
+                'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+                'runtimes': ['claude'], 'links': {}, 'directories': []}))
+        (self.reader / install.INDEX).write_text(json.dumps({'package': 'opascope-skills', 'schema': 1, 'bases': [str(bases[1].resolve())]}))
+        with (self.reader / '.git/info/exclude').open('a') as stream:
+            stream.write(install.INDEX + '\n')
+        calls = []
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if str(command[1]).endswith('install.py'):
+                calls.append(command[command.index('--base') + 1])
+                return subprocess.CompletedProcess(command, 0)
+            return real_run(command, *args, **kwargs)
+        with patch.object(kit, 'ROOT', self.reader), patch.object(Path, 'home', return_value=bases[0]), \
+                patch.object(kit.subprocess, 'run', run), contextlib.redirect_stdout(io.StringIO()):
+            kit.update()
+        self.assertEqual(sorted(calls), sorted(str(b.resolve()) for b in bases))
+
+    def test_named_update_does_not_claim_every_install(self):
+        base = self.base / 'project'
+        base.mkdir()
+        (base / install.RECEIPT).write_text(json.dumps({
+            'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+            'runtimes': ['claude'], 'links': {}, 'directories': []}))
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if str(command[1]).endswith('install.py'):
+                return subprocess.CompletedProcess(command, 0)
+            return real_run(command, *args, **kwargs)
+        with patch.object(kit, 'ROOT', self.reader), patch.object(kit.subprocess, 'run', run), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            kit.update(bases=[base])
+        self.assertIn('Refreshed the installations you named', output.getvalue())
+        self.assertNotIn('every installation', output.getvalue())
+
+    def test_one_failed_relink_does_not_skip_the_rest(self):
+        bases = [self.base / 'first', self.base / 'second']
+        for base in bases:
+            base.mkdir()
+            (base / install.RECEIPT).write_text(json.dumps({
+                'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+                'runtimes': ['claude'], 'links': {}, 'directories': []}))
+        calls = []
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if str(command[1]).endswith('install.py'):
+                calls.append(command[command.index('--base') + 1])
+                return subprocess.CompletedProcess(command, 1 if len(calls) == 1 else 0)
+            return real_run(command, *args, **kwargs)
+        with patch.object(kit, 'ROOT', self.reader), patch.object(kit.subprocess, 'run', run), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            with self.assertRaisesRegex(ValueError, 'Not refreshed') as caught:
+                kit.update(bases=bases)
+        self.assertEqual(calls, [str(b) for b in bases])
+        self.assertIn('1 installation(s) were not refreshed', output.getvalue())
+        self.assertIn(f'--base "{bases[0]}" --runtime claude --yes', str(caught.exception))
+        self.assertIn("What's new:", output.getvalue())
+
+    def test_unreadable_list_stops_update_before_the_checkout_moves(self):
+        (self.reader / install.INDEX).write_text('not ours')
+        with (self.reader / '.git/info/exclude').open('a') as stream:
+            stream.write(install.INDEX + '\n')
+        before = self.git(self.reader, 'rev-parse', 'HEAD')
+        with patch.object(kit, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, 'Unrecognized install list'):
+                kit.update()
+        self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), before)
+        self.assertEqual((self.reader / install.INDEX).read_text(), 'not ours')
+
+    def test_missing_listed_install_stops_update_before_the_checkout_moves(self):
+        gone = str(self.base / 'unplugged-drive')
+        (self.reader / install.INDEX).write_text(json.dumps({'package': 'opascope-skills', 'schema': 1, 'bases': [gone]}))
+        with (self.reader / '.git/info/exclude').open('a') as stream:
+            stream.write(install.INDEX + '\n')
+        before = self.git(self.reader, 'rev-parse', 'HEAD')
+        with patch.object(kit, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, 'not found, so nothing was updated'):
+                kit.update()
+        self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), before)
+        with patch.object(install, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()):
+            install.main(['forget', '--base', gone])
+        self.assertEqual(install.read_index(self.reader), [])
+
+    def test_install_waits_while_an_update_holds_the_checkout(self):
+        base = self.base / 'project'
+        base.mkdir()
+        (base / install.RECEIPT).write_text(json.dumps({
+            'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+            'runtimes': ['codex'], 'links': {}, 'directories': []}))
+        lock = str(install.index_path(self.reader).with_name(install.INDEX + '.lock'))
+        with (self.reader / '.git/info/exclude').open('a') as stream:
+            stream.write(install.INDEX + '*\n')
+        seen = []
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if str(command[1]).endswith('install.py'):
+                # The lock is held for the whole update and handed to the installer it starts.
+                seen.append((Path(lock).exists(), kwargs['env']['OPASCOPE_CHECKOUT_LOCKED'] == lock))
+                return subprocess.CompletedProcess(command, 0)
+            return real_run(command, *args, **kwargs)
+        with patch.object(kit, 'ROOT', self.reader), patch.object(Path, 'home', return_value=base), \
+                patch.object(kit.subprocess, 'run', run), contextlib.redirect_stdout(io.StringIO()):
+            kit.update()
+        self.assertEqual(seen, [(True, True)])
+        self.assertFalse(Path(lock).exists())
 
 if __name__ == '__main__':
     unittest.main()

@@ -32,6 +32,13 @@ class TemporaryTest(unittest.TestCase):
         self.output = contextlib.redirect_stdout(io.StringIO())
         self.output.__enter__()
         self.addCleanup(self.output.__exit__, None, None, None)
+        # Keep the install list out of the real checkout and out of the snapshots.
+        lists = tempfile.TemporaryDirectory(prefix='skill-list-')
+        self.addCleanup(lists.cleanup)
+        self.index = Path(lists.name) / install.INDEX
+        listing = patch.object(install, 'index_path', lambda root=None: self.index)
+        listing.start()
+        self.addCleanup(listing.stop)
 
 
 class InstallerTests(TemporaryTest):
@@ -206,6 +213,136 @@ class InstallerTests(TemporaryTest):
             with self.assertRaises(OSError):
                 install.install(self.base, ['codex'])
         self.assertEqual(snapshot(self.base), before)
+
+    def status(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            install.main(['status', *argv])
+        return json.loads(output.getvalue())
+
+    def test_project_install_shows_in_status_from_anywhere(self):
+        project = self.base / 'project'
+        project.mkdir()
+        install.install(project, ['claude'])
+        with patch.object(Path, 'home', return_value=self.base / 'elsewhere'):
+            report = self.status()
+        self.assertTrue(report['installed'])
+        self.assertEqual(report['installs'], [{'base': str(project.resolve()), 'runtimes': ['claude']}])
+
+    def test_uninstall_drops_off_the_list(self):
+        install.install(self.base, ['codex'])
+        self.assertEqual(install.read_index(), [str(self.base.resolve())])
+        install.uninstall(self.base)
+        self.assertEqual(install.read_index(), [])
+        with patch.object(Path, 'home', return_value=self.base):
+            report = self.status()
+        self.assertFalse(report['installed'])
+        self.assertIn('Not installed anywhere', report['note'])
+
+    def test_listed_base_without_receipt_is_stale(self):
+        gone = str(self.base / 'deleted-project')
+        install.write_index([gone])
+        with patch.object(Path, 'home', return_value=self.base):
+            report = self.status()
+        self.assertFalse(report['installed'])
+        self.assertEqual(report['stale'], [gone])
+
+    def test_install_inside_the_checkout_is_refused(self):
+        package = self.base / 'package'
+        (package / 'project').mkdir(parents=True)
+        before = snapshot(self.base)
+        with patch.object(install, 'ROOT', package):
+            for base in (package, package / 'project'):
+                with self.assertRaisesRegex(ValueError, 'inside the package checkout'):
+                    install.install(base, ['claude'])
+        self.assertEqual(snapshot(self.base), before)
+        self.assertEqual(install.read_index(), [])
+
+    def test_install_made_before_the_list_is_found_and_added(self):
+        install.install(self.base, ['codex'])
+        self.index.unlink()
+        with patch.object(Path, 'home', return_value=self.base):
+            report = self.status()
+        self.assertTrue(report['installed'])
+        self.assertEqual(install.read_index(), [str(self.base.resolve())])
+
+    def test_symlinked_home_is_counted_once(self):
+        install.install(self.base, ['codex'])
+        alias = Path(tempfile.mkdtemp(prefix='skill-alias-')) / 'home'
+        self.addCleanup(alias.parent.rmdir)
+        self.addCleanup(alias.unlink)
+        alias.symlink_to(self.base, target_is_directory=True)
+        with patch.object(Path, 'home', return_value=alias):
+            report = self.status()
+        self.assertEqual([i['base'] for i in report['installs']], [str(self.base.resolve())])
+
+    def test_concurrent_list_changes_keep_every_base(self):
+        import threading
+        names = [str(self.base / f'project-{n}') for n in range(40)]
+        threads = [threading.Thread(target=install.change_index, kwargs={'add': [name]}) for name in names]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(install.read_index(), sorted(names))
+        self.assertFalse(self.index.with_name(install.INDEX + '.lock').exists())
+
+    def test_stuck_checkout_lock_refuses_before_changing_anything(self):
+        lock = self.index.with_name(install.INDEX + '.lock')
+        lock.write_text('')
+        before = snapshot(self.base)
+        with patch.object(install.time, 'monotonic', side_effect=[0, 100]):
+            with self.assertRaisesRegex(ValueError, 'Another install, uninstall or update is running'):
+                install.install(self.base, ['codex'])
+        self.assertEqual(snapshot(self.base), before)
+        self.assertTrue(lock.exists())
+
+    def test_status_does_not_re_add_a_base_uninstalled_meanwhile(self):
+        install.install(self.base, ['codex'])
+        self.index.unlink()
+        real = install.read_receipt
+        calls = []
+        def racing(base):
+            calls.append(base)
+            if len(calls) == 2:
+                install.uninstall(self.base)  # lands between discovery and recording
+            return real(base)
+        with patch.object(Path, 'home', return_value=self.base), patch.object(install, 'read_receipt', racing):
+            install.installed_bases()
+        self.assertEqual(install.read_index(), [])
+
+    def test_unrecognized_list_is_never_replaced(self):
+        for body in ('someone else\'s notes', '{"bases": null}', '{"bases": ["a"]}',
+                     '{"package": "opascope-skills", "schema": 1, "bases": 7}'):
+            self.index.write_text(body)
+            install.install(self.base, ['codex'])
+            self.assertTrue((self.base / install.RECEIPT).is_file())
+            self.assertEqual(self.index.read_text(), body)
+            with patch.object(Path, 'home', return_value=self.base):
+                report = self.status()
+            self.assertTrue(report['installed'])
+            self.assertIn('Unrecognized install list', report['problem'])
+            install.uninstall(self.base)
+            self.assertEqual(self.index.read_text(), body)
+
+    def test_status_works_when_the_list_cannot_be_written(self):
+        install.install(self.base, ['codex'])
+        self.index.unlink()
+        self.index.with_name(install.INDEX + '.lock').write_text('')
+        with patch.object(Path, 'home', return_value=self.base), \
+                patch.object(install.time, 'monotonic', side_effect=[0, 100]):
+            report = self.status()
+        self.assertTrue(report['installed'])
+
+    def test_list_changes_happen_under_the_base_lock(self):
+        held = []
+        real = install.record
+        def record(**kwargs):
+            held.append((self.base / install.LOCK).exists())
+            real(**kwargs)
+        with patch.object(install, 'record', record):
+            install.install(self.base, ['codex'])
+            install.uninstall(self.base)
+        self.assertEqual(held, [True, True])
 
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):
