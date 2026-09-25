@@ -146,10 +146,11 @@ class UpdateTests(unittest.TestCase):
             return real_run(command, *args, **kwargs)
         with patch.object(kit, 'ROOT', self.reader), patch.object(kit.subprocess, 'run', run), \
                 contextlib.redirect_stdout(io.StringIO()) as output:
-            with self.assertRaisesRegex(ValueError, 'Not refreshed'):
+            with self.assertRaisesRegex(ValueError, 'Not refreshed') as caught:
                 kit.update(bases=bases)
         self.assertEqual(calls, [str(b) for b in bases])
         self.assertIn('1 installation(s) were not refreshed', output.getvalue())
+        self.assertIn(f'--base "{bases[0]}" --runtime claude --yes', str(caught.exception))
         self.assertIn("What's new:", output.getvalue())
 
     def test_unreadable_list_stops_update_before_the_checkout_moves(self):
@@ -162,6 +163,20 @@ class UpdateTests(unittest.TestCase):
                 kit.update()
         self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), before)
         self.assertEqual((self.reader / install.INDEX).read_text(), 'not ours')
+
+    def test_missing_listed_install_stops_update_before_the_checkout_moves(self):
+        gone = str(self.base / 'unplugged-drive')
+        (self.reader / install.INDEX).write_text(json.dumps({'package': 'opascope-skills', 'schema': 1, 'bases': [gone]}))
+        with (self.reader / '.git/info/exclude').open('a') as stream:
+            stream.write(install.INDEX + '\n')
+        before = self.git(self.reader, 'rev-parse', 'HEAD')
+        with patch.object(kit, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, 'not found, so nothing was updated'):
+                kit.update()
+        self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), before)
+        with patch.object(install, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()):
+            install.main(['forget', '--base', gone])
+        self.assertEqual(install.read_index(self.reader), [])
 
 if __name__ == '__main__':
     unittest.main()

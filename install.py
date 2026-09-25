@@ -328,13 +328,19 @@ def uninstall(base):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['install', 'uninstall', 'status'], nargs='?', default='install')
+    parser.add_argument('action', choices=['install', 'uninstall', 'status', 'forget'], nargs='?', default='install')
     parser.add_argument('--runtime', choices=['claude', 'codex', 'both'])
     parser.add_argument('--base', type=Path, help='Home directory for global install, or project directory for local install')
     parser.add_argument('--yes', action='store_true', help='Use explicit flags or defaults without prompts')
     args = parser.parse_args(argv)
     base = args.base
     runtime = args.runtime
+    if args.action == 'forget':
+        if base is None:
+            raise ValueError('Name the place to forget with --base.')
+        change_index(remove=[str(base.expanduser().resolve())])
+        print(f'Forgot {base}. Nothing there was changed.')
+        return 0
     if not args.yes and args.action != 'status':
         print('Opascope Skills | six work skills, one router, no build step')
         print('Installation creates links back to this checkout. Keep the checkout in place.')

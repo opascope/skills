@@ -233,7 +233,11 @@ def update(check=False, offline=False, bases=()):
     if not bases:
         # Refuse before the checkout moves: an unreadable list would leave installs stale.
         install.read_index(ROOT)
-        bases = [Path(base) for base, _ in install.installed_bases(ROOT)[0]]
+        found, stale = install.installed_bases(ROOT)
+        if stale:
+            raise ValueError('Listed installations were not found, so nothing was updated:\n' + '\n'.join(stale) +
+                             '\nReconnect them, or forget one you removed with: python3 install.py forget --base <path>')
+        bases = [Path(base) for base, _ in found]
     for base in bases:
         receipt = install.read_receipt(Path(base))
         if not receipt or receipt['source'] != str(ROOT):
@@ -251,7 +255,7 @@ def update(check=False, offline=False, bases=()):
         runtime = 'both' if len(runtimes) == 2 else runtimes[0]
         result = subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'])
         if result.returncode:
-            failed.append(str(base))
+            failed.append((str(base), runtime))
     if failed:
         print(f'Updated to {tag}, but {len(failed)} installation(s) were not refreshed.')
     elif named:
@@ -263,7 +267,7 @@ def update(check=False, offline=False, bases=()):
         print("What's new:\n\n" + '\n\n'.join(notes))
     if failed:
         raise ValueError('Not refreshed. Fix the error above, then run for each:\n' + '\n'.join(
-            f'python3 "{ROOT / "install.py"}" --base "{base}" --yes' for base in failed))
+            f'python3 "{ROOT / "install.py"}" --base "{base}" --runtime {runtime} --yes' for base, runtime in failed))
 
 
 def main(argv=None):
