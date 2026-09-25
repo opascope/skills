@@ -318,6 +318,17 @@ class InstallerTests(TemporaryTest):
             report = self.status()
         self.assertTrue(report['installed'])
 
+    def test_list_changes_happen_under_the_base_lock(self):
+        held = []
+        real = install.record
+        def record(**kwargs):
+            held.append((self.base / install.LOCK).exists())
+            real(**kwargs)
+        with patch.object(install, 'record', record):
+            install.install(self.base, ['codex'])
+            install.uninstall(self.base)
+        self.assertEqual(held, [True, True])
+
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):
         original = self.base / 'original'

@@ -278,7 +278,8 @@ def install(base, runtimes):
                 json.dump(receipt, stream, indent=2)
                 stream.write('\n')
             temporary.replace(base / RECEIPT)
-    record(add=[str(base)])
+        # Still under the base lock, so a racing uninstall cannot be undone by this entry.
+        record(add=[str(base)])
     print(f'Installed {len(desired)} links for {", ".join(runtimes)} in {base}')
     print('Open a new session. Claude Code: /opascope | Codex: $opascope')
     print('Try: define done for sorting a folder of notes without losing any.')
