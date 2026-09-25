@@ -229,51 +229,48 @@ def update(check=False, offline=False, bases=()):
     if branch != 'main':
         raise ValueError('Update requires the main branch. Feature and detached checkouts are not changed.')
     import install
-    named = bool(bases)
-    if not bases:
-        # Refuse before the checkout moves: an unreadable list would leave installs stale.
-        install.read_index(ROOT)
-        found, stale = install.installed_bases(ROOT)
-        if stale:
-            raise ValueError('Listed installations were not found, so nothing was updated:\n' + '\n'.join(stale) +
-                             '\nReconnect them, or forget one you removed with: python3 install.py forget --base <path>')
-        bases = [Path(base) for base, _ in found]
-    for base in bases:
-        receipt = install.read_receipt(Path(base))
-        if not receipt or receipt['source'] != str(ROOT):
-            raise ValueError(f'No matching installation receipt at {base}')
-    git('fetch', '--no-tags', 'origin', f'refs/tags/{tag}:refs/tags/{tag}')
-    if git('merge-base', '--is-ancestor', 'HEAD', tag, check=False).returncode:
-        raise ValueError('Release diverges from this checkout; refusing to overwrite local history.')
-    git('merge', '--ff-only', tag)
-    failed, done, pending = [], set(), list(bases)
-    while pending:
-        for base in pending:
+    # Hold the checkout for the whole update, so no install starts or ends unseen.
+    with install.checkout_locked(ROOT):
+        named = bool(bases)
+        if not bases:
+            # Refuse before the checkout moves: an unreadable list would leave installs stale.
+            install.read_index(ROOT)
+            found, stale = install.installed_bases(ROOT)
+            if stale:
+                raise ValueError('Listed installations were not found, so nothing was updated:\n' + '\n'.join(stale) +
+                                 '\nReconnect them, or forget one you removed with: python3 install.py forget --base <path>')
+            bases = [Path(base) for base, _ in found]
+        for base in bases:
+            receipt = install.read_receipt(Path(base))
+            if not receipt or receipt['source'] != str(ROOT):
+                raise ValueError(f'No matching installation receipt at {base}')
+        git('fetch', '--no-tags', 'origin', f'refs/tags/{tag}:refs/tags/{tag}')
+        if git('merge-base', '--is-ancestor', 'HEAD', tag, check=False).returncode:
+            raise ValueError('Release diverges from this checkout; refusing to overwrite local history.')
+        git('merge', '--ff-only', tag)
+        failed = []
+        env = dict(os.environ, OPASCOPE_CHECKOUT_LOCKED=str(install.index_path(ROOT).with_name(install.INDEX + '.lock')))
+        for base in bases:
             # Run the updated implementation, not the module loaded before the merge.
             # One base failing must not leave the others stale: the checkout has already moved.
-            done.add(str(Path(base).resolve()))
             receipt = install.read_receipt(Path(base))
-            if not receipt:
-                continue
             runtimes = receipt['runtimes']
             runtime = 'both' if len(runtimes) == 2 else runtimes[0]
-            result = subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'])
+            result = subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'], env=env)
             if result.returncode:
                 failed.append((str(base), runtime))
-        # An install recorded while this ran was linked against the old files; refresh it too.
-        pending = [] if named else [Path(b) for b, _ in install.installed_bases(ROOT)[0] if b not in done]
-    if failed:
-        print(f'Updated to {tag}, but {len(failed)} installation(s) were not refreshed.')
-    elif named:
-        print(f'Updated to {tag}. Refreshed the installations you named. Run install.py status to see the others.')
-    else:
-        print(f'Updated to {tag}. Refreshed every installation this checkout knows about.')
-    notes = whats_new(current, latest)
-    if notes:
-        print("What's new:\n\n" + '\n\n'.join(notes))
-    if failed:
-        raise ValueError('Not refreshed. Fix the error above, then run for each:\n' + '\n'.join(
-            f'python3 "{ROOT / "install.py"}" --base "{base}" --runtime {runtime} --yes' for base, runtime in failed))
+        if failed:
+            print(f'Updated to {tag}, but {len(failed)} installation(s) were not refreshed.')
+        elif named:
+            print(f'Updated to {tag}. Refreshed the installations you named. Run install.py status to see the others.')
+        else:
+            print(f'Updated to {tag}. Refreshed every installation this checkout knows about.')
+        notes = whats_new(current, latest)
+        if notes:
+            print("What's new:\n\n" + '\n\n'.join(notes))
+        if failed:
+            raise ValueError('Not refreshed. Fix the error above, then run for each:\n' + '\n'.join(
+                f'python3 "{ROOT / "install.py"}" --base "{base}" --runtime {runtime} --yes' for base, runtime in failed))
 
 
 def main(argv=None):

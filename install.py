@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 import time
 import uuid
 
@@ -86,10 +87,22 @@ def write_index(bases, root=None):
             temporary.unlink()
 
 
+_HELD = threading.local()
+
+
 @contextmanager
-def index_locked(root=None):
-    """Serialize changes to the list, since installs in different bases share it."""
+def checkout_locked(root=None):
+    """One install, uninstall or update at a time per checkout, for the whole operation.
+
+    Reentrant in this process, and inherited by installers an update starts.
+    A checkout that cannot hold a lock file cannot hold the list either, so it
+    proceeds unlocked and the list stays as it is.
+    """
     lock = index_path(root).with_name(INDEX + '.lock')
+    held = _HELD.__dict__.setdefault('locks', [])
+    if str(lock) in held or os.environ.get('OPASCOPE_CHECKOUT_LOCKED') == str(lock):
+        yield
+        return
     deadline = time.monotonic() + 10
     while True:
         try:
@@ -97,17 +110,23 @@ def index_locked(root=None):
             break
         except FileExistsError:
             if time.monotonic() > deadline:
-                raise ValueError(f'The install list is locked: {lock}. If interrupted, inspect it before removing the lock.')
+                raise ValueError(f'Another install, uninstall or update is running: {lock}. '
+                                 'If interrupted, inspect it before removing the lock.')
             time.sleep(0.05)
+        except OSError:
+            yield
+            return
     os.close(fd)
+    held.append(str(lock))
     try:
         yield
     finally:
+        held.remove(str(lock))
         lock.unlink()
 
 
 def change_index(add=(), remove=(), root=None):
-    with index_locked(root):
+    with checkout_locked(root):
         bases = [b for b in read_index(root) if b not in remove]
         write_index(bases + list(add), root)
 
@@ -152,8 +171,12 @@ def installed_bases(root=None):
             stale.append(candidate)
     if usable and any(base not in listed for base, _ in found):
         try:
-            change_index(add=[base for base, _ in found], root=root)
-        except (OSError, ValueError):
+            with checkout_locked(root):
+                # Check again under the lock, so a base uninstalled meanwhile is not re-added.
+                add = [base for base, _ in found if base not in listed and
+                       (read_receipt(Path(base)) or {}).get('source') == str(root)]
+                change_index(add=add, root=root)
+        except (OSError, ValueError, KeyError):
             pass  # Reporting what exists matters more than recording it.
     return found, stale
 
@@ -183,7 +206,7 @@ def install(base, runtimes):
     if base == ROOT or ROOT in base.parents:
         raise ValueError(f'Refusing to install inside the package checkout: {base}. '
                          'It would block updates. Choose your home or another project.')
-    with locked(base):
+    with checkout_locked(), locked(base):
         prior = read_receipt(base)
         if prior and prior['source'] != str(ROOT):
             raise ValueError('This base belongs to a different checkout. Uninstall that checkout first.')
@@ -288,7 +311,7 @@ def install(base, runtimes):
 
 def uninstall(base):
     base = base.resolve(strict=True)
-    with locked(base):
+    with checkout_locked(), locked(base):
         receipt = read_receipt(base)
         if not receipt:
             record(remove=[str(base)])

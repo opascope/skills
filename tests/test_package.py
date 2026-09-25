@@ -286,14 +286,29 @@ class InstallerTests(TemporaryTest):
         self.assertEqual(install.read_index(), sorted(names))
         self.assertFalse(self.index.with_name(install.INDEX + '.lock').exists())
 
-    def test_stuck_list_lock_does_not_fail_a_finished_install(self):
+    def test_stuck_checkout_lock_refuses_before_changing_anything(self):
         lock = self.index.with_name(install.INDEX + '.lock')
         lock.write_text('')
+        before = snapshot(self.base)
         with patch.object(install.time, 'monotonic', side_effect=[0, 100]):
-            install.install(self.base, ['codex'])
-        self.assertTrue((self.base / '.agents/skills/opascope/SKILL.md').is_file())
-        self.assertTrue((self.base / install.RECEIPT).is_file())
+            with self.assertRaisesRegex(ValueError, 'Another install, uninstall or update is running'):
+                install.install(self.base, ['codex'])
+        self.assertEqual(snapshot(self.base), before)
         self.assertTrue(lock.exists())
+
+    def test_status_does_not_re_add_a_base_uninstalled_meanwhile(self):
+        install.install(self.base, ['codex'])
+        self.index.unlink()
+        real = install.read_receipt
+        calls = []
+        def racing(base):
+            calls.append(base)
+            if len(calls) == 2:
+                install.uninstall(self.base)  # lands between discovery and recording
+            return real(base)
+        with patch.object(Path, 'home', return_value=self.base), patch.object(install, 'read_receipt', racing):
+            install.installed_bases()
+        self.assertEqual(install.read_index(), [])
 
     def test_unrecognized_list_is_never_replaced(self):
         for body in ('someone else\'s notes', '{"bases": null}', '{"bases": ["a"]}',

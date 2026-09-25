@@ -178,31 +178,28 @@ class UpdateTests(unittest.TestCase):
             install.main(['forget', '--base', gone])
         self.assertEqual(install.read_index(self.reader), [])
 
-    def test_install_recorded_during_update_is_refreshed(self):
-        first, late = self.base / 'first', self.base / 'late'
-        for base in (first, late):
-            base.mkdir()
-            (base / install.RECEIPT).write_text(json.dumps({
-                'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
-                'runtimes': ['codex'], 'links': {}, 'directories': []}))
-        listing = self.reader / install.INDEX
-        listing.write_text(json.dumps({'package': 'opascope-skills', 'schema': 1, 'bases': [str(first.resolve())]}))
+    def test_install_waits_while_an_update_holds_the_checkout(self):
+        base = self.base / 'project'
+        base.mkdir()
+        (base / install.RECEIPT).write_text(json.dumps({
+            'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+            'runtimes': ['codex'], 'links': {}, 'directories': []}))
+        lock = str(install.index_path(self.reader).with_name(install.INDEX + '.lock'))
         with (self.reader / '.git/info/exclude').open('a') as stream:
-            stream.write(install.INDEX + '\n')
-        calls = []
+            stream.write(install.INDEX + '*\n')
+        seen = []
         real_run = subprocess.run
         def run(command, *args, **kwargs):
             if str(command[1]).endswith('install.py'):
-                calls.append(command[command.index('--base') + 1])
-                # Another process records a new install while the first refresh runs.
-                listing.write_text(json.dumps({'package': 'opascope-skills', 'schema': 1,
-                                               'bases': [str(first.resolve()), str(late.resolve())]}))
+                # The lock is held for the whole update and handed to the installer it starts.
+                seen.append((Path(lock).exists(), kwargs['env']['OPASCOPE_CHECKOUT_LOCKED'] == lock))
                 return subprocess.CompletedProcess(command, 0)
             return real_run(command, *args, **kwargs)
-        with patch.object(kit, 'ROOT', self.reader), patch.object(Path, 'home', return_value=first), \
+        with patch.object(kit, 'ROOT', self.reader), patch.object(Path, 'home', return_value=base), \
                 patch.object(kit.subprocess, 'run', run), contextlib.redirect_stdout(io.StringIO()):
             kit.update()
-        self.assertEqual(calls, [str(first.resolve()), str(late.resolve())])
+        self.assertEqual(seen, [(True, True)])
+        self.assertFalse(Path(lock).exists())
 
 if __name__ == '__main__':
     unittest.main()
