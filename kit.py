@@ -231,6 +231,8 @@ def update(check=False, offline=False, bases=()):
     import install
     named = bool(bases)
     if not bases:
+        # Refuse before the checkout moves: an unreadable list would leave installs stale.
+        install.read_index(ROOT)
         bases = [Path(base) for base, _ in install.installed_bases(ROOT)[0]]
     for base in bases:
         receipt = install.read_receipt(Path(base))

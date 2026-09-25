@@ -361,6 +361,10 @@ def main(argv=None):
                   'installs': [{'base': b, 'runtimes': r.get('runtimes', [])} for b, r in found]}
         if stale:
             report['stale'] = stale
+        try:
+            read_index()
+        except ValueError as exc:
+            report['problem'] = f'{exc}. Only your home and current folder were checked.'
         if not found:
             report['note'] = 'Not installed anywhere from this checkout.'
         print(json.dumps(report, indent=2))

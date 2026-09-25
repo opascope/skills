@@ -303,7 +303,9 @@ class InstallerTests(TemporaryTest):
             self.assertTrue((self.base / install.RECEIPT).is_file())
             self.assertEqual(self.index.read_text(), body)
             with patch.object(Path, 'home', return_value=self.base):
-                self.assertTrue(self.status()['installed'])
+                report = self.status()
+            self.assertTrue(report['installed'])
+            self.assertIn('Unrecognized install list', report['problem'])
             install.uninstall(self.base)
             self.assertEqual(self.index.read_text(), body)
 

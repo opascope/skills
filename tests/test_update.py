@@ -152,5 +152,16 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('1 installation(s) were not refreshed', output.getvalue())
         self.assertIn("What's new:", output.getvalue())
 
+    def test_unreadable_list_stops_update_before_the_checkout_moves(self):
+        (self.reader / install.INDEX).write_text('not ours')
+        with (self.reader / '.git/info/exclude').open('a') as stream:
+            stream.write(install.INDEX + '\n')
+        before = self.git(self.reader, 'rev-parse', 'HEAD')
+        with patch.object(kit, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, 'Unrecognized install list'):
+                kit.update()
+        self.assertEqual(self.git(self.reader, 'rev-parse', 'HEAD'), before)
+        self.assertEqual((self.reader / install.INDEX).read_text(), 'not ours')
+
 if __name__ == '__main__':
     unittest.main()
