@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+- `install.py status` now shows every place the skills are installed. Before,
+  it only looked in your home folder and missed project installs.
+- `kit.py update` refreshes every install, not just the one in your home folder.
+  If a listed place is missing, it stops and changes nothing.
+- `install.py forget --base <path>` drops a place you deleted from the list.
+- The installer will not install inside the cloned folder itself. That blocked
+  later updates.
+
 ## 0.5.0
 
 - Each skill folder now sits at the top of the repo. Open the repo and the
