@@ -148,15 +148,20 @@ Run these from the cloned folder:
 
 ```sh
 python3 install.py --runtime both --base /path/to/project --yes
-python3 install.py status --base /path/to/project
+python3 install.py status
 python3 kit.py update --check
 python3 kit.py update --base /path/to/project
 python3 install.py uninstall --base /path/to/project --yes
+python3 install.py forget --base /path/you/deleted
 ```
 
-Leave off `--base` and it uses your home directory.
+Leave off `--base` and install or uninstall uses your home directory.
 
-An update only runs on a clean checkout of the main branch. It only moves forward to a released version. Pass each place you installed to relink it. Or run the installer there again afterwards.
+The checkout keeps a list of every place it is installed. `status` shows each one. `kit.py update` refreshes all of them. If a listed place is missing, update stops and changes nothing. Use `forget` for a place you deleted.
+
+The installer will not install inside the cloned folder itself. That would block updates.
+
+An update only runs on a clean checkout of the main branch. It only moves forward to a released version.
 
 Ordinary use does not check the network for an update. The skills read only version tags already on your disk.
 
@@ -178,7 +183,7 @@ It does not edit your shell profile or your agent config. It installs nothing th
 | Dependencies | Varies, often npm or Python packages | None. Markdown and Python standard library |
 | Completion checking | The agent reports done | The parent process runs proofs independently |
 | Install | Copy files or add a marketplace | Symlinks with a record, reversible uninstall |
-| Tests | Usually none | 73 standard-library tests |
+| Tests | Usually none | 91 standard-library tests |
 
 Use a mega-collection for domain capability. Use this alongside it for the decisions around the work.
 
@@ -251,7 +256,7 @@ No. It sends no telemetry and runs no background update process. The usage comma
 It exits with a distinct status for blocker, iteration cap, timeout, or three calls without measurable progress. It preserves every file. None of those is reported as success. A later explicit run resumes from the files, even on the other runtime.
 
 **How do I know it actually works?**
-`python3 -m unittest discover -s tests -v` runs 73 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
+`python3 -m unittest discover -s tests -v` runs 91 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
 
 ## Verification
 

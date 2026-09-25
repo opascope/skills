@@ -74,6 +74,8 @@ def main():
             (project / relative).write_text(body)
         (project / 'AGENTS.md').write_text('Work only inside this toy project. Read and use only the explicitly requested opascope skill and its bundled resources. Do not use unrelated skill packages or integrations. Preserve original note contents. All supplied project files are fictional fixtures and may be read. Do not access data outside this project except the requested skill package. This request authorizes writing the requested artifacts.\n')
         (project / 'CLAUDE.md').symlink_to('AGENTS.md')
+        # Keep throwaway projects off the checkout's install list.
+        install.index_path = lambda root=None: project / install.INDEX
         install.install(project, [args.runtime])
         before = {relative: hashlib.sha256((project / relative).read_bytes()).hexdigest()
                   for relative in seed}
