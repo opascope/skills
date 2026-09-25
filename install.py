@@ -102,6 +102,15 @@ def change_index(add=(), remove=(), root=None):
         write_index(bases + list(add), root)
 
 
+def record(add=(), remove=()):
+    """Update the list after a base changed. The base is already done, so never fail it."""
+    try:
+        change_index(add=add, remove=remove)
+    except (OSError, ValueError) as exc:
+        print(f'Note: could not update the install list ({exc}). '
+              'status still finds installs in your home or current folder.')
+
+
 def installed_bases(root=None):
     """Bases holding a receipt from this checkout, and listed bases that no longer do.
 
@@ -250,7 +259,7 @@ def install(base, runtimes):
                 json.dump(receipt, stream, indent=2)
                 stream.write('\n')
             temporary.replace(base / RECEIPT)
-    change_index(add=[str(base)])
+    record(add=[str(base)])
     print(f'Installed {len(desired)} links for {", ".join(runtimes)} in {base}')
     print('Open a new session. Claude Code: /opascope | Codex: $opascope')
     print('Try: define done for sorting a folder of notes without losing any.')
@@ -262,7 +271,7 @@ def uninstall(base):
     with locked(base):
         receipt = read_receipt(base)
         if not receipt:
-            change_index(remove=[str(base)])
+            record(remove=[str(base)])
             print('Nothing installed here.')
             return
         preserved = []
@@ -291,7 +300,7 @@ def uninstall(base):
             except OSError:
                 preserved.append(relative)
         (base / RECEIPT).unlink()
-        change_index(remove=[str(base)])
+        record(remove=[str(base)])
     print('Removed installed links, receipt and empty directories created by the installer.')
     print('Source checkout and task artifacts retained.')
     if preserved:

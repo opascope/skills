@@ -286,6 +286,15 @@ class InstallerTests(TemporaryTest):
         self.assertEqual(install.read_index(), sorted(names))
         self.assertFalse(self.index.with_name(install.INDEX + '.lock').exists())
 
+    def test_stuck_list_lock_does_not_fail_a_finished_install(self):
+        lock = self.index.with_name(install.INDEX + '.lock')
+        lock.write_text('')
+        with patch.object(install.time, 'monotonic', side_effect=[0, 100]):
+            install.install(self.base, ['codex'])
+        self.assertTrue((self.base / '.agents/skills/opascope/SKILL.md').is_file())
+        self.assertTrue((self.base / install.RECEIPT).is_file())
+        self.assertTrue(lock.exists())
+
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):
         original = self.base / 'original'

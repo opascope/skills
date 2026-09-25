@@ -130,5 +130,27 @@ class UpdateTests(unittest.TestCase):
         self.assertIn('Refreshed the installations you named', output.getvalue())
         self.assertNotIn('every installation', output.getvalue())
 
+    def test_one_failed_relink_does_not_skip_the_rest(self):
+        bases = [self.base / 'first', self.base / 'second']
+        for base in bases:
+            base.mkdir()
+            (base / install.RECEIPT).write_text(json.dumps({
+                'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+                'runtimes': ['claude'], 'links': {}, 'directories': []}))
+        calls = []
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if str(command[1]).endswith('install.py'):
+                calls.append(command[command.index('--base') + 1])
+                return subprocess.CompletedProcess(command, 1 if len(calls) == 1 else 0)
+            return real_run(command, *args, **kwargs)
+        with patch.object(kit, 'ROOT', self.reader), patch.object(kit.subprocess, 'run', run), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            with self.assertRaisesRegex(ValueError, 'Not refreshed'):
+                kit.update(bases=bases)
+        self.assertEqual(calls, [str(b) for b in bases])
+        self.assertIn('1 installation(s) were not refreshed', output.getvalue())
+        self.assertIn("What's new:", output.getvalue())
+
 if __name__ == '__main__':
     unittest.main()

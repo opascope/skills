@@ -240,19 +240,28 @@ def update(check=False, offline=False, bases=()):
     if git('merge-base', '--is-ancestor', 'HEAD', tag, check=False).returncode:
         raise ValueError('Release diverges from this checkout; refusing to overwrite local history.')
     git('merge', '--ff-only', tag)
+    failed = []
     for base in bases:
         # Run the updated implementation, not the module loaded before the merge.
+        # One base failing must not leave the others stale: the checkout has already moved.
         receipt = install.read_receipt(Path(base))
         runtimes = receipt['runtimes']
         runtime = 'both' if len(runtimes) == 2 else runtimes[0]
-        subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'], check=True)
-    if named:
+        result = subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'])
+        if result.returncode:
+            failed.append(str(base))
+    if failed:
+        print(f'Updated to {tag}, but {len(failed)} installation(s) were not refreshed.')
+    elif named:
         print(f'Updated to {tag}. Refreshed the installations you named. Run install.py status to see the others.')
     else:
         print(f'Updated to {tag}. Refreshed every installation this checkout knows about.')
     notes = whats_new(current, latest)
     if notes:
         print("What's new:\n\n" + '\n\n'.join(notes))
+    if failed:
+        raise ValueError('Not refreshed. Fix the error above, then run for each:\n' + '\n'.join(
+            f'python3 "{ROOT / "install.py"}" --base "{base}" --yes' for base in failed))
 
 
 def main(argv=None):
