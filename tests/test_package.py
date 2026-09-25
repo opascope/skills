@@ -43,7 +43,7 @@ class InstallerTests(TemporaryTest):
             skills = list((self.base / location).glob('*/SKILL.md'))
             self.assertEqual(len(skills), 7)
             for skill in skills:
-                self.assertEqual(skill.read_bytes(), (ROOT / 'skills' / skill.parent.name / 'SKILL.md').read_bytes())
+                self.assertEqual(skill.read_bytes(), (ROOT / skill.parent.name / 'SKILL.md').read_bytes())
                 self.assertTrue((skill.parent / 'kit.py').resolve().samefile(ROOT / 'kit.py'))
                 self.assertTrue((skill.parent / 'shared.md').is_file())
         install.install(self.base, ['claude', 'codex'])
@@ -428,7 +428,7 @@ class StartTests(TemporaryTest):
 
 class PackageTests(unittest.TestCase):
     def test_every_skill_has_metadata_and_resolving_markdown_links(self):
-        skills = list((ROOT / 'skills').glob('*/SKILL.md'))
+        skills = list(ROOT.glob('opascope*/SKILL.md'))
         self.assertEqual(len(skills), 7)
         import re
         for path in skills:

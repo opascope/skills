@@ -55,7 +55,7 @@ def matching_link(path, target):
 def desired_links(base, runtimes):
     links = {}
     for runtime in runtimes:
-        for skill in sorted((ROOT / 'skills').glob('opascope*')):
+        for skill in sorted(ROOT.glob('opascope*')):
             if not (skill / 'SKILL.md').is_file():
                 continue
             for source in sorted(skill.iterdir()):

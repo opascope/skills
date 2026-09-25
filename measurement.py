@@ -15,7 +15,7 @@ BUILTINS = {'help', 'exit', 'quit', 'clear', 'compact', 'model', 'effort',
 
 def catalog():
     """Read only entrypoint metadata; never traverse entire linked repositories."""
-    roots = [Path(__file__).resolve().parent / 'skills']
+    roots = [Path(__file__).resolve().parent]
     for base in (Path.home(), Path.cwd()):
         roots += [base / '.claude/skills', base / '.agents/skills', base / '.codex/skills']
     names = set()
