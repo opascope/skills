@@ -229,6 +229,7 @@ def update(check=False, offline=False, bases=()):
     if branch != 'main':
         raise ValueError('Update requires the main branch. Feature and detached checkouts are not changed.')
     import install
+    named = bool(bases)
     if not bases:
         bases = [Path(base) for base, _ in install.installed_bases(ROOT)[0]]
     for base in bases:
@@ -245,7 +246,10 @@ def update(check=False, offline=False, bases=()):
         runtimes = receipt['runtimes']
         runtime = 'both' if len(runtimes) == 2 else runtimes[0]
         subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'], check=True)
-    print(f'Updated to {tag}. Every installation this checkout knows about was refreshed.')
+    if named:
+        print(f'Updated to {tag}. Refreshed the installations you named. Run install.py status to see the others.')
+    else:
+        print(f'Updated to {tag}. Refreshed every installation this checkout knows about.')
     notes = whats_new(current, latest)
     if notes:
         print("What's new:\n\n" + '\n\n'.join(notes))

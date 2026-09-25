@@ -275,6 +275,17 @@ class InstallerTests(TemporaryTest):
             report = self.status()
         self.assertEqual([i['base'] for i in report['installs']], [str(self.base.resolve())])
 
+    def test_concurrent_list_changes_keep_every_base(self):
+        import threading
+        names = [str(self.base / f'project-{n}') for n in range(40)]
+        threads = [threading.Thread(target=install.change_index, kwargs={'add': [name]}) for name in names]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(install.read_index(), sorted(names))
+        self.assertFalse(self.index.with_name(install.INDEX + '.lock').exists())
+
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):
         original = self.base / 'original'

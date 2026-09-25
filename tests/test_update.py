@@ -113,5 +113,22 @@ class UpdateTests(unittest.TestCase):
             kit.update()
         self.assertEqual(sorted(calls), sorted(str(b.resolve()) for b in bases))
 
+    def test_named_update_does_not_claim_every_install(self):
+        base = self.base / 'project'
+        base.mkdir()
+        (base / install.RECEIPT).write_text(json.dumps({
+            'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
+            'runtimes': ['claude'], 'links': {}, 'directories': []}))
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if str(command[1]).endswith('install.py'):
+                return subprocess.CompletedProcess(command, 0)
+            return real_run(command, *args, **kwargs)
+        with patch.object(kit, 'ROOT', self.reader), patch.object(kit.subprocess, 'run', run), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            kit.update(bases=[base])
+        self.assertIn('Refreshed the installations you named', output.getvalue())
+        self.assertNotIn('every installation', output.getvalue())
+
 if __name__ == '__main__':
     unittest.main()

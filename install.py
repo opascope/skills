@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 import uuid
 
 ROOT = Path(__file__).resolve().parent
@@ -75,6 +76,32 @@ def write_index(bases, root=None):
             temporary.unlink()
 
 
+@contextmanager
+def index_locked(root=None):
+    """Serialize changes to the list, since installs in different bases share it."""
+    lock = index_path(root).with_name(INDEX + '.lock')
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            break
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                raise ValueError(f'The install list is locked: {lock}. If interrupted, inspect it before removing the lock.')
+            time.sleep(0.05)
+    os.close(fd)
+    try:
+        yield
+    finally:
+        lock.unlink()
+
+
+def change_index(add=(), remove=(), root=None):
+    with index_locked(root):
+        bases = [b for b in read_index(root) if b not in remove]
+        write_index(bases + list(add), root)
+
+
 def installed_bases(root=None):
     """Bases holding a receipt from this checkout, and listed bases that no longer do.
 
@@ -99,7 +126,7 @@ def installed_bases(root=None):
         elif candidate in listed:
             stale.append(candidate)
     if any(base not in listed for base, _ in found):
-        write_index(listed + [base for base, _ in found], root)
+        change_index(add=[base for base, _ in found], root=root)
     return found, stale
 
 
@@ -223,7 +250,7 @@ def install(base, runtimes):
                 json.dump(receipt, stream, indent=2)
                 stream.write('\n')
             temporary.replace(base / RECEIPT)
-    write_index(read_index() + [str(base)])
+    change_index(add=[str(base)])
     print(f'Installed {len(desired)} links for {", ".join(runtimes)} in {base}')
     print('Open a new session. Claude Code: /opascope | Codex: $opascope')
     print('Try: define done for sorting a folder of notes without losing any.')
@@ -235,7 +262,7 @@ def uninstall(base):
     with locked(base):
         receipt = read_receipt(base)
         if not receipt:
-            write_index([b for b in read_index() if b != str(base)])
+            change_index(remove=[str(base)])
             print('Nothing installed here.')
             return
         preserved = []
@@ -264,7 +291,7 @@ def uninstall(base):
             except OSError:
                 preserved.append(relative)
         (base / RECEIPT).unlink()
-        write_index([b for b in read_index() if b != str(base)])
+        change_index(remove=[str(base)])
     print('Removed installed links, receipt and empty directories created by the installer.')
     print('Source checkout and task artifacts retained.')
     if preserved:
