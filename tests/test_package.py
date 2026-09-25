@@ -137,7 +137,7 @@ class InstallerTests(TemporaryTest):
 
 
     def old_layout(self):
-        """Make an install look like one made when skills lived in skills/<name>/."""
+        """Make an install look like one made before the skill folders moved to the root."""
         receipt = json.loads((self.base / install.RECEIPT).read_text())
         old = {}
         for relative, target in receipt['links'].items():
@@ -157,7 +157,7 @@ class InstallerTests(TemporaryTest):
         self.assertTrue(links)
         for link in links:
             self.assertTrue(link.exists(), link)
-            self.assertNotIn('/skills/opascope', str(link.readlink()))
+            self.assertFalse(str(link.readlink()).startswith(str(ROOT / "skills")))
         upgraded = snapshot(self.base)
         self.assertEqual(set(upgraded), set(fresh))
         install.install(self.base, ['claude', 'codex'])

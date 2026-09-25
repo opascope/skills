@@ -217,13 +217,13 @@ One example: the test asks `loop-builder` to set up a long run and then stop. It
 
 When you add a skill, you add its promise file beside it. You do not edit any test.
 
-`plainlang.py` checks the wording of this README and every skill name, so a contributor knows their words get checked.
+`lib/plainlang.py` checks the wording of this README and every skill name, so a contributor knows their words get checked.
 
 Commands:
 
 ```sh
-python3 promise.py list
-python3 plainlang.py
+python3 lib/promise.py list
+python3 lib/plainlang.py
 python3 -m unittest discover -s tests -v
 ```
 
