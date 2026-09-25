@@ -56,11 +56,21 @@ def index_path(root=None):
 
 
 def read_index(root=None):
-    try:
-        bases = json.loads(index_path(root).read_text()).get('bases', [])
-    except (OSError, ValueError, AttributeError):
+    """The listed bases. Refuses a file this package did not write, so it is never replaced."""
+    path = index_path(root)
+    if not exists(path):
         return []
-    return [b for b in bases if isinstance(b, str)]
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError
+        data = json.loads(path.read_text())
+        if data.get('package') != 'opascope-skills' or data.get('schema') != 1 or \
+                not isinstance(data.get('bases'), list) or \
+                not all(isinstance(b, str) for b in data['bases']):
+            raise ValueError
+    except (OSError, ValueError, AttributeError):
+        raise ValueError(f'Unrecognized install list, left unchanged: {path}')
+    return data['bases']
 
 
 def write_index(bases, root=None):
@@ -68,7 +78,7 @@ def write_index(bases, root=None):
     temporary = path.with_name(path.name + '.' + uuid.uuid4().hex)
     try:
         with temporary.open('x') as stream:
-            json.dump({'bases': sorted(set(bases))}, stream, indent=2)
+            json.dump({'package': 'opascope-skills', 'schema': 1, 'bases': sorted(set(bases))}, stream, indent=2)
             stream.write('\n')
         temporary.replace(path)
     finally:
@@ -118,11 +128,17 @@ def installed_bases(root=None):
     list existed are found and added to it.
     """
     root = root or ROOT
-    listed = read_index(root)
+    try:
+        listed, usable = read_index(root), True
+    except ValueError:
+        listed, usable = [], False
     found, stale, seen = [], [], set()
     for candidate in listed + [str(Path.home()), str(Path.cwd())]:
         # Compare resolved paths, so a symlinked home is not counted twice.
-        base = Path(candidate).resolve()
+        try:
+            base = Path(candidate).resolve()
+        except (OSError, RuntimeError):
+            continue
         if str(base) in seen:
             continue
         seen.add(str(base))
@@ -134,8 +150,11 @@ def installed_bases(root=None):
             found.append((str(base), receipt))
         elif candidate in listed:
             stale.append(candidate)
-    if any(base not in listed for base, _ in found):
-        change_index(add=[base for base, _ in found], root=root)
+    if usable and any(base not in listed for base, _ in found):
+        try:
+            change_index(add=[base for base, _ in found], root=root)
+        except (OSError, ValueError):
+            pass  # Reporting what exists matters more than recording it.
     return found, stale
 
 

@@ -295,6 +295,27 @@ class InstallerTests(TemporaryTest):
         self.assertTrue((self.base / install.RECEIPT).is_file())
         self.assertTrue(lock.exists())
 
+    def test_unrecognized_list_is_never_replaced(self):
+        for body in ('someone else\'s notes', '{"bases": null}', '{"bases": ["a"]}',
+                     '{"package": "opascope-skills", "schema": 1, "bases": 7}'):
+            self.index.write_text(body)
+            install.install(self.base, ['codex'])
+            self.assertTrue((self.base / install.RECEIPT).is_file())
+            self.assertEqual(self.index.read_text(), body)
+            with patch.object(Path, 'home', return_value=self.base):
+                self.assertTrue(self.status()['installed'])
+            install.uninstall(self.base)
+            self.assertEqual(self.index.read_text(), body)
+
+    def test_status_works_when_the_list_cannot_be_written(self):
+        install.install(self.base, ['codex'])
+        self.index.unlink()
+        self.index.with_name(install.INDEX + '.lock').write_text('')
+        with patch.object(Path, 'home', return_value=self.base), \
+                patch.object(install.time, 'monotonic', side_effect=[0, 100]):
+            report = self.status()
+        self.assertTrue(report['installed'])
+
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):
         original = self.base / 'original'

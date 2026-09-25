@@ -98,7 +98,7 @@ class UpdateTests(unittest.TestCase):
             (base / install.RECEIPT).write_text(json.dumps({
                 'package': 'opascope-skills', 'schema': 1, 'source': str(self.reader),
                 'runtimes': ['claude'], 'links': {}, 'directories': []}))
-        (self.reader / install.INDEX).write_text(json.dumps({'bases': [str(bases[1].resolve())]}))
+        (self.reader / install.INDEX).write_text(json.dumps({'package': 'opascope-skills', 'schema': 1, 'bases': [str(bases[1].resolve())]}))
         with (self.reader / '.git/info/exclude').open('a') as stream:
             stream.write(install.INDEX + '\n')
         calls = []
