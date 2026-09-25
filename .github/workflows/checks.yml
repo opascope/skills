@@ -25,6 +25,6 @@ jobs:
       - name: Tests
         run: python3 -m unittest discover -s tests -v
       - name: Contracts are well formed
-        run: python3 promise.py check
+        run: python3 lib/promise.py check
       - name: Reader-facing words
-        run: python3 plainlang.py --strict
+        run: python3 lib/plainlang.py --strict

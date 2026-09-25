@@ -7,7 +7,7 @@ import re
 import sys
 import unittest
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 
 # Words that only mean something once you already work this way. Each entry is
 # paired with the plain wording that replaces it, so a failure teaches the fix

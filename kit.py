@@ -12,6 +12,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'lib'))
 CONFIG = '.opascope-skills.json'
 DEFAULT_ARTIFACTS = '.opascope-work'
 

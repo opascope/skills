@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import sys
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 SURFACES = ('artifact', 'output', 'project')
 CHECKS = ('present', 'absent', 'at_least', 'absent_path')
 # 'at_least' pairs with exactly one of these. 'per' compares totals across the

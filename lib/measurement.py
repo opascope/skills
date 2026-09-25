@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import re
 
+ROOT = Path(__file__).resolve().parent.parent
+
 LIMITATION = ('Counts only explicit by-name invocations, once per skill per session. '
               'Undercounts skills that self-select from their description. '
               'Read-only and local-only: no transcript content is transmitted.')
@@ -15,7 +17,7 @@ BUILTINS = {'help', 'exit', 'quit', 'clear', 'compact', 'model', 'effort',
 
 def catalog():
     """Read only entrypoint metadata; never traverse entire linked repositories."""
-    roots = [Path(__file__).resolve().parent]
+    roots = [ROOT]
     for base in (Path.home(), Path.cwd()):
         roots += [base / '.claude/skills', base / '.agents/skills', base / '.codex/skills']
     names = set()
