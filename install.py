@@ -83,10 +83,14 @@ def installed_bases(root=None):
     """
     root = root or ROOT
     listed = read_index(root)
-    found, stale = [], []
-    for candidate in dict.fromkeys(listed + [str(Path.home()), str(Path.cwd())]):
+    found, stale, seen = [], [], set()
+    for candidate in listed + [str(Path.home()), str(Path.cwd())]:
+        # Compare resolved paths, so a symlinked home is not counted twice.
+        base = Path(candidate).resolve()
+        if str(base) in seen:
+            continue
+        seen.add(str(base))
         try:
-            base = Path(candidate).resolve()
             receipt = read_receipt(base)
         except (OSError, ValueError, KeyError):
             receipt = None

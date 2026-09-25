@@ -265,6 +265,16 @@ class InstallerTests(TemporaryTest):
         self.assertTrue(report['installed'])
         self.assertEqual(install.read_index(), [str(self.base.resolve())])
 
+    def test_symlinked_home_is_counted_once(self):
+        install.install(self.base, ['codex'])
+        alias = Path(tempfile.mkdtemp(prefix='skill-alias-')) / 'home'
+        self.addCleanup(alias.parent.rmdir)
+        self.addCleanup(alias.unlink)
+        alias.symlink_to(self.base, target_is_directory=True)
+        with patch.object(Path, 'home', return_value=alias):
+            report = self.status()
+        self.assertEqual([i['base'] for i in report['installs']], [str(self.base.resolve())])
+
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):
         original = self.base / 'original'
