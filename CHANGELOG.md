@@ -5,6 +5,8 @@
 - `install.py status` now shows every place the skills are installed. Before,
   it only looked in your home folder and missed project installs.
 - `kit.py update` refreshes every install, not just the one in your home folder.
+  If a listed place is missing, it stops and changes nothing.
+- `install.py forget --base <path>` drops a place you deleted from the list.
 - The installer will not install inside the cloned folder itself. That blocked
   later updates.
 
