@@ -88,11 +88,13 @@ def install(base, runtimes):
                 if parent == dest.parent and exists(parent) and rel not in previous['directories']:
                     conflicts.append(str(parent))
                 parent = parent.parent
-            if exists(dest) and not (previous['links'].get(relative) == target and matching_link(dest, target)):
+            # A link the receipt recorded and that still points where it recorded is owned.
+            owned = relative in previous['links'] and matching_link(dest, previous['links'][relative])
+            if exists(dest) and not owned:
                 conflicts.append(str(dest))
         if conflicts:
             raise ValueError('Collisions; nothing installed:\n' + '\n'.join(sorted(set(conflicts))))
-        created_dirs, created_links = [], []
+        created_dirs, created_links, retargeted = [], [], {}
         try:
             for relative, target in desired.items():
                 dest = base / relative
@@ -104,6 +106,9 @@ def install(base, runtimes):
                 for directory in reversed(missing):
                     directory.mkdir()
                     created_dirs.append(str(directory.relative_to(base)))
+                if dest.is_symlink() and os.readlink(dest) != target and relative in previous['links']:
+                    retargeted[relative] = os.readlink(dest)
+                    dest.unlink()
                 if not exists(dest):
                     dest.symlink_to(target, target_is_directory=Path(target).is_dir())
                     created_links.append(relative)
@@ -127,6 +132,10 @@ def install(base, runtimes):
                 dest = base / relative
                 if matching_link(dest, desired[relative]):
                     dest.unlink()
+            for relative, old_target in retargeted.items():
+                dest = base / relative
+                if not exists(dest):
+                    dest.symlink_to(old_target, target_is_directory=Path(old_target).is_dir())
             for relative in reversed(created_dirs):
                 try:
                     (base / relative).rmdir()

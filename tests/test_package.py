@@ -135,6 +135,77 @@ class InstallerTests(TemporaryTest):
         self.assertEqual(snapshot(self.base), {})
 
 
+    def old_layout(self):
+        """Make an install look like one made when skills lived in skills/<name>/."""
+        receipt = json.loads((self.base / install.RECEIPT).read_text())
+        old = {}
+        for relative, target in receipt['links'].items():
+            old[relative] = str(ROOT / 'skills' / Path(target).relative_to(ROOT))
+            (self.base / relative).unlink()
+            (self.base / relative).symlink_to(old[relative])
+        receipt['links'] = old
+        (self.base / install.RECEIPT).write_text(json.dumps(receipt, indent=2) + '\n')
+        return old
+
+    def test_old_layout_links_move_to_root_layout(self):
+        install.install(self.base, ['claude', 'codex'])
+        fresh = snapshot(self.base)
+        self.old_layout()
+        install.install(self.base, ['claude', 'codex'])
+        links = [p for p in self.base.rglob('*') if p.is_symlink()]
+        self.assertTrue(links)
+        for link in links:
+            self.assertTrue(link.exists(), link)
+            self.assertNotIn('/skills/opascope', str(link.readlink()))
+        upgraded = snapshot(self.base)
+        self.assertEqual(set(upgraded), set(fresh))
+        install.install(self.base, ['claude', 'codex'])
+        self.assertEqual(snapshot(self.base), upgraded)
+
+    def test_unowned_file_still_collides_after_move(self):
+        install.install(self.base, ['codex'])
+        self.old_layout()
+        path = self.base / '.agents/skills/opascope/notes.md'
+        path.write_text('user file')
+        receipt = json.loads((self.base / install.RECEIPT).read_text())
+        keep = install.desired_links(self.base, ['codex'])
+        keep['.agents/skills/opascope/notes.md'] = str(ROOT / 'opascope/SKILL.md')
+        before = snapshot(self.base)
+        with patch.object(install, 'desired_links', return_value=keep):
+            with self.assertRaisesRegex(ValueError, 'Collisions'):
+                install.install(self.base, ['codex'])
+        self.assertEqual(snapshot(self.base), before)
+        self.assertNotIn('.agents/skills/opascope/notes.md', receipt['links'])
+
+    def test_hand_repointed_link_is_not_owned(self):
+        install.install(self.base, ['codex'])
+        self.old_layout()
+        path = self.base / '.agents/skills/opascope/SKILL.md'
+        mine = self.base / 'mine.md'
+        mine.write_text('mine')
+        path.unlink()
+        path.symlink_to(mine)
+        before = snapshot(self.base)
+        with self.assertRaisesRegex(ValueError, 'Collisions'):
+            install.install(self.base, ['codex'])
+        self.assertEqual(snapshot(self.base), before)
+
+    def test_failed_move_restores_old_links(self):
+        install.install(self.base, ['codex'])
+        self.old_layout()
+        before = snapshot(self.base)
+        original = Path.symlink_to
+        calls = []
+        def flaky(path, *args, **kwargs):
+            calls.append(path)
+            if len(calls) == 4:
+                raise OSError('simulated filesystem error')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'symlink_to', flaky):
+            with self.assertRaises(OSError):
+                install.install(self.base, ['codex'])
+        self.assertEqual(snapshot(self.base), before)
+
 class ArtifactTests(TemporaryTest):
     def test_project_move_preserves_pickup(self):
         original = self.base / 'original'
