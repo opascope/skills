@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import sys
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 SURFACES = ('artifact', 'output', 'project')
 CHECKS = ('present', 'absent', 'at_least', 'absent_path')
 # 'at_least' pairs with exactly one of these. 'per' compares totals across the
@@ -24,7 +24,7 @@ PER_KEYS = ('per', 'per_block')
 
 def contracts():
     found = {}
-    for path in sorted((ROOT / 'skills').glob('*/promise.json')):
+    for path in sorted(ROOT.glob('opascope*/promise.json')):
         found[path.parent.name] = json.loads(path.read_text())
     return found
 
@@ -152,7 +152,7 @@ def main():
             print(f'{name}\n  promise: {contract["promise"]}\n  '
                   f'{len(contract["assertions"])} checks, {adversarial} adversarial')
         return 0
-    installed = {p.name for p in (ROOT / 'skills').iterdir() if (p / 'SKILL.md').is_file()}
+    installed = {p.name for p in ROOT.glob('opascope*') if (p / 'SKILL.md').is_file()}
     problems = [f'{name}: installed with no promise.json' for name in sorted(installed - set(found))]
     for name, contract in found.items():
         problems += wellformed(name, contract)

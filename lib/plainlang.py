@@ -7,7 +7,7 @@ import re
 import sys
 import unittest
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 
 # Words that only mean something once you already work this way. Each entry is
 # paired with the plain wording that replaces it, so a failure teaches the fix
@@ -52,7 +52,7 @@ NAME_TOKENS = (1, 3)
 
 
 def skills():
-    return sorted(p for p in (ROOT / 'skills').iterdir() if (p / 'SKILL.md').is_file())
+    return sorted(p for p in ROOT.glob('opascope*') if (p / 'SKILL.md').is_file())
 
 
 def description(skill):
@@ -209,7 +209,7 @@ def check():
                  'write it so adding a skill does not date the sentence')
 
     for path in sorted(ROOT.glob('*.md')) + sorted(ROOT.glob('docs/*.md')) + \
-            sorted(ROOT.glob('skills/*/**/*.md')):
+            sorted(ROOT.glob('opascope*/**/*.md')):
         for link in outside_links(path.read_text()):
             fail(findings, str(path.relative_to(ROOT)),
                  f'links to another account: {link}',
@@ -218,7 +218,7 @@ def check():
     table = {name: sentence.strip() for name, sentence in re.findall(
         r'^\|\s*`?([a-z][a-z0-9-]*)`?\s*\|\s*(.+?)\s*\|\s*$', readme, re.M)}
     promised = {}
-    for path in (ROOT / 'skills').glob('*/promise.json'):
+    for path in ROOT.glob('opascope*/promise.json'):
         try:
             promised[path.parent.name] = json.loads(path.read_text()).get('promise', '')
         except (OSError, ValueError):

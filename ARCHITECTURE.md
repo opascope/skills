@@ -42,7 +42,7 @@ sharing it, as they would any other working notes.
 
 ## One source, two discovery locations
 
-Canonical skills live under `skills/opascope-*`. Each installation creates a real
+Canonical skills live in the `opascope*` folders at the repo root. Each installation creates a real
 directory with links to its canonical skill's files, including shared `kit.py` and
 `shared.md` links. This keeps discovery flat without copying the skill text. Claude Code
 uses `.claude/skills`; Codex uses `.agents/skills`, either below the user's home or
@@ -107,11 +107,11 @@ record types and intentional undercounting are documented in `docs/usage.md`.
 Two gates hold as skills are added. Neither has a fixed skill list, so adding a
 skill never means editing a test.
 
-`skills/*/promise.json` states one skill's promise and the checks that would
+`opascope*/promise.json` states one skill's promise and the checks that would
 catch it breaking that promise. A skill is instructions, so the only honest proof
 is running it and reading the result; the checks turn that reading into pass or
 fail. Each contract also carries the fixture request that produces the result.
-`promise.py check` validates contract shape offline and refuses a contract with
+`lib/promise.py check` validates contract shape offline and refuses a contract with
 no adversarial check, one whose fixture plants something the skill is supposed to
 refuse and which fails if the skill did it anyway. `tests/live_runtime.py`
 discovers cases from the contracts, runs each against a real CLI, and evaluates
@@ -123,7 +123,7 @@ every contract and requires every adversarial check to trip, so an adversarial
 check that cannot fail is itself a test failure. It also replays the wrong-looking
 outputs that once slipped past, each named with the check that has to catch it.
 
-`plainlang.py` gates the words a reader sees: skill names, the README and each
+`lib/plainlang.py` gates the words a reader sees: skill names, the README and each
 promise sentence. It fails on a listed trade term, a Flesch-Kincaid grade above 8,
 an average sentence above 17 words, a name outside one to three plain words, and
 any phrase stating how many skills exist. Skill bodies are exempt, since only an

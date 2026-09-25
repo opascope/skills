@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'lib'))
 import plainlang
 import promise
 
@@ -56,7 +57,7 @@ def project_where_the_work_was_done():
 class PromiseContractTests(unittest.TestCase):
     def test_every_installed_skill_ships_a_contract(self):
         contracts = promise.contracts()
-        installed = {p.name for p in (ROOT / 'skills').iterdir() if (p / 'SKILL.md').is_file()}
+        installed = {p.name for p in ROOT.glob('opascope*') if (p / 'SKILL.md').is_file()}
         self.assertEqual(installed, set(contracts), 'a skill without a promise.json is untested')
         problems = []
         for name, contract in contracts.items():
@@ -313,7 +314,7 @@ class PromiseContractTests(unittest.TestCase):
                       [r['id'] for r in results if not r['passed']])
 
     def test_contracts_are_readable_json(self):
-        for path in (ROOT / 'skills').glob('*/promise.json'):
+        for path in ROOT.glob('opascope*/promise.json'):
             with self.subTest(path.parent.name):
                 json.loads(path.read_text())
 
