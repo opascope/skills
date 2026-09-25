@@ -246,16 +246,22 @@ def update(check=False, offline=False, bases=()):
     if git('merge-base', '--is-ancestor', 'HEAD', tag, check=False).returncode:
         raise ValueError('Release diverges from this checkout; refusing to overwrite local history.')
     git('merge', '--ff-only', tag)
-    failed = []
-    for base in bases:
-        # Run the updated implementation, not the module loaded before the merge.
-        # One base failing must not leave the others stale: the checkout has already moved.
-        receipt = install.read_receipt(Path(base))
-        runtimes = receipt['runtimes']
-        runtime = 'both' if len(runtimes) == 2 else runtimes[0]
-        result = subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'])
-        if result.returncode:
-            failed.append((str(base), runtime))
+    failed, done, pending = [], set(), list(bases)
+    while pending:
+        for base in pending:
+            # Run the updated implementation, not the module loaded before the merge.
+            # One base failing must not leave the others stale: the checkout has already moved.
+            done.add(str(Path(base).resolve()))
+            receipt = install.read_receipt(Path(base))
+            if not receipt:
+                continue
+            runtimes = receipt['runtimes']
+            runtime = 'both' if len(runtimes) == 2 else runtimes[0]
+            result = subprocess.run([sys.executable, str(ROOT / 'install.py'), '--base', str(base), '--runtime', runtime, '--yes'])
+            if result.returncode:
+                failed.append((str(base), runtime))
+        # An install recorded while this ran was linked against the old files; refresh it too.
+        pending = [] if named else [Path(b) for b, _ in install.installed_bases(ROOT)[0] if b not in done]
     if failed:
         print(f'Updated to {tag}, but {len(failed)} installation(s) were not refreshed.')
     elif named:
