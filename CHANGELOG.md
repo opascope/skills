@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Each skill folder now sits at the top of the repo. Open the repo and the
+  skills are the first thing you see.
+- Helper modules moved to `lib/`. `install.py` and `kit.py` stay where they
+  were.
+- Installed skills keep the same names and content. `kit.py update` moves your
+  existing links for you.
+- Contributors run the checks as `python3 lib/promise.py check` and
+  `python3 lib/plainlang.py --strict`.
+
 ## 0.4.0
 
 - Skills start with `kit.py start`. It only reads. It shows your tasks, what
