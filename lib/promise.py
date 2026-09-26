@@ -46,6 +46,9 @@ def wellformed(name, contract):
         problems.append(f'{name}: the promise must be one short sentence')
     if not contract.get('fixture', {}).get('request'):
         problems.append(f'{name}: fixture needs a request to send')
+    needs = contract.get('fixture', {}).get('requires_env', [])
+    if not isinstance(needs, list) or not all(isinstance(n, str) and n for n in needs):
+        problems.append(f'{name}: fixture "requires_env" must be a list of variable names')
     assertions = contract.get('assertions', [])
     seen = set()
     for assertion in assertions:

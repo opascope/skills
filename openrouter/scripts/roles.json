@@ -1,0 +1,51 @@
+{
+  "note": "The only place a model is named. A role names a need. Override one role for a call or a rollback with OPENROUTER_MODEL_<ROLE>, for example OPENROUTER_MODEL_FAST.",
+  "roles": {
+    "auto": {
+      "model": "typesafe/jev-router",
+      "description": "No model named. Jev picks the model and reasoning effort for each request."
+    },
+    "fast": {
+      "model": "~google/gemini-flash-latest",
+      "description": "Quick everyday calls. Extraction, classification, short answers, JSON, images.",
+      "effort": "low"
+    },
+    "frontier": {
+      "model": "~anthropic/claude-sonnet-latest",
+      "description": "Hard reasoning and careful judgment."
+    },
+    "writer": {
+      "model": "~moonshotai/kimi-latest",
+      "description": "Long-form prose."
+    },
+    "sonar": {
+      "model": "perplexity/sonar",
+      "description": "Web research with citations.",
+      "pin": true,
+      "why": "Sonar names are products, not versions, so there is no latest alias to follow."
+    },
+    "sonar-pro": {
+      "model": "perplexity/sonar-pro",
+      "description": "Deeper web research with citations.",
+      "pin": true,
+      "why": "Sonar names are products, not versions, so there is no latest alias to follow."
+    },
+    "embed": {
+      "model": "openai/text-embedding-3-small",
+      "description": "Text embeddings for search.",
+      "pin": true,
+      "why": "A vector index is only valid for the model that built it, so a change means rebuilding the index."
+    },
+    "decision": {
+      "model": "~typesafe/jev-latest",
+      "description": "Closed-choice decisions on the decisions endpoint.",
+      "checked_by": "decisions-endpoint",
+      "why": "This alias is used on the decisions endpoint and is not listed in the public catalogs. It follows new Jev versions."
+    }
+  },
+  "router": {
+    "json": true,
+    "image": true,
+    "note": "Whether the auto role (Jev router) honors --json and --image. Measured in references/auto-routing.md; when false, those calls go to the fast role."
+  }
+}

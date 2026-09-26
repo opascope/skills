@@ -68,6 +68,7 @@ Each skill is named for its job. If you are not sure which to use, `opascope` pi
 | `session-handoff` | Leaves the next session the exact next step and proof of what is already done. |
 | `optimize` | Says what to delete, argues the other side first, and changes nothing. |
 | `loop-builder` | Sets up a long unattended run with a real finish line and a spending limit. |
+| `openrouter` | Asks another model and tells you which model answered and what it cost. |
 | `opascope` | Names the skill that fits, and runs it only if you asked for the work. |
 
 ### How do I stop an agent from guessing at requirements?
@@ -183,7 +184,7 @@ It does not edit your shell profile or your agent config. It installs nothing th
 | Dependencies | Varies, often npm or Python packages | None. Markdown and Python standard library |
 | Completion checking | The agent reports done | The parent process runs proofs independently |
 | Install | Copy files or add a marketplace | Symlinks with a record, reversible uninstall |
-| Tests | Usually none | 101 standard-library tests |
+| Tests | Usually none | 112 standard-library tests |
 
 Use a mega-collection for domain capability. Use this alongside it for the decisions around the work.
 
@@ -256,7 +257,7 @@ No. It sends no telemetry and runs no background update process. The usage comma
 It exits with a distinct status for blocker, iteration cap, timeout, or three calls without measurable progress. It preserves every file. None of those is reported as success. A later explicit run resumes from the files, even on the other runtime.
 
 **How do I know it actually works?**
-`python3 -m unittest discover -s tests -v` runs 101 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
+`python3 -m unittest discover -s tests -v` runs 112 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
 
 ## Verification
 
