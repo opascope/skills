@@ -24,7 +24,7 @@ and check each page against the objections your buyers actually raise.
 
 ## Common mistakes
 
-- **Whole-page state for a top-of-page question.** Extra text lowers accuracy. Trim the state
+- **Whole-page state for a top-of-page question.** Send only what the question is about. Trim the state
   to the part of the page the question is about.
 - **"Is this a good landing page."** Too vague to calibrate. Ask about one specific,
   checkable thing per question.

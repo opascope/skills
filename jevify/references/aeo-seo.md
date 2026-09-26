@@ -45,7 +45,7 @@ a higher cutoff. Add the missing option, rerun the sample, and read the answers 
 
 - **Deciding whether two keywords share a search result.** That is a fact about result
   pages, not about meaning. Compare actual result URLs in code.
-- **Asking whether a page is relevant to a goal.** Goal questions are the hardest to check.
+- **Asking whether a page is relevant to a goal.** Goal questions are harder to check.
   Replace them with concrete options ("product page about our category", "unrelated"), or
   budget for more review.
 - **Commercial-sounding articles.** A product page and an article can read alike. Describe

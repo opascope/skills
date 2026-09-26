@@ -14,7 +14,7 @@ which formats survive in a category, and gate briefs and drafts before they cost
 | Join tags to spend, days live, CPA | code | numbers |
 | Which hooks and formats survive longest | code | arithmetic over Jev's tags |
 | **Brief gate** (does the brief have a clear hook, audience, proof) | **Jev** | score each criterion separately, shoot only the top |
-| **Does this hook sound AI-written?** | **Jev** | a common use; treat as a flag for a human editor |
+| **Does this hook sound AI-written?** | **Jev** | treat as a flag for a human editor |
 | Write hooks, scripts, briefs | writing model | Jev cannot write; send the failed criteria back to the writer |
 
 ## Ready jobs
