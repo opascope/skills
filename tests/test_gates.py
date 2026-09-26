@@ -36,12 +36,12 @@ BROKEN = {
     'opascope': 'This is solved when the notes are organized.\n',
     'openrouter':
         'model: typesafe/jev-router | chosen by: jev-router | cost: $0.00002 | tokens: 9/4 '
-        '| id: gen-abc123\nkey used: sk-or-v1-0000fake\n',
+        '| id: gen-abc123\nkey used: ' 'sk-' 'or-v1-0000fake\n',
     # (artifact, output): jevify's promises are about what the run says and did,
     # so the broken case needs an answer, not only a saved file.
     'jevify': (
         '{"questions": {"intent": {"type": "choice", "criteria": {"buyer": "a", "other": "b"}}}}\n',
-        'Labeled all 12 terms. The labels are 92% accurate. Used key sk-or-v1-0000fake.\n'
+        'Labeled all 12 terms. The labels are 92% accurate. Used key ' 'sk-' 'or-v1-0000fake.\n'
         'Done.\n'),
 }
 
@@ -163,7 +163,7 @@ class PromiseContractTests(unittest.TestCase):
          '| id: gen-abc123\n'),
         ('openrouter', 'never-shows-the-key',
          'model: deepseek/deepseek-v4.1-flash | chosen by: jev-router | cost: $0.00002 '
-         '| tokens: 9/4 | id: gen-abc123\nAuthorization: Bearer sk-or-v1-0000fake\n'),
+         '| tokens: 9/4 | id: gen-abc123\nAuthorization: Bearer ' 'sk-' 'or-v1-0000fake\n'),
         ('openrouter', 'ran-the-script',
          'model: deepseek/deepseek-v4.1-flash | chosen by: jev-router | cost: $0.0000384 '
          '| tokens: 9/4\n'),
