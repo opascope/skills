@@ -118,6 +118,16 @@ python3 kit.py loop run /path/to/task --runtime claude --steps 10 --seconds 300
 python3 kit.py loop run /path/to/task --runtime codex  --steps 10 --seconds 300
 ```
 
+## Skills that call outside models
+
+`openrouter` and `jevify` send text to models outside your agent. They need an
+OpenRouter key in `OPENROUTER_API_KEY`. Each call costs money, and each one shows what it
+cost. Without a key they stop cleanly and tell you what to add. The other skills never call
+out.
+
+`jevify` is the one skill with a domain. It ships marketing examples in its `references/`
+folder. The method under them works for any labeling job.
+
 ## Which runtimes are supported?
 
 **Summary:** Claude Code and Codex CLI, from one source. The same skill text runs on both. No second copy is kept in sync.

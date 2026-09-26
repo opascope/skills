@@ -1,7 +1,8 @@
 # Contributing to the Opascope work-process skills
 
 Keep this package domain-independent and dependency-free: markdown and Python's
-standard library only. Read ARCHITECTURE.md before changing artifact semantics.
+standard library only. Only `openrouter` and `jevify` call outside models; they need
+`OPENROUTER_API_KEY`, show each call's cost, and stop cleanly without it. Read ARCHITECTURE.md before changing artifact semantics.
 Canonical skill instructions live in the skill folders at the repo root, never in generated copies.
 
 Use feature branches and pull requests to main. Run
