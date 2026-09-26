@@ -39,6 +39,13 @@ class TemporaryTest(unittest.TestCase):
         listing = patch.object(install, 'index_path', lambda root=None: self.index)
         listing.start()
         self.addCleanup(listing.stop)
+        # An empty home, so skills on the machine running the tests change nothing.
+        home = tempfile.TemporaryDirectory(prefix='skill-home-')
+        self.addCleanup(home.cleanup)
+        self.home = Path(home.name)
+        environment = patch.dict('os.environ', {'HOME': str(self.home)})
+        environment.start()
+        self.addCleanup(environment.stop)
 
 
 class InstallerTests(TemporaryTest):
@@ -170,6 +177,30 @@ class InstallerTests(TemporaryTest):
         self.taken()
         install.install(self.base, ['claude'])
         self.assertEqual(next_line(), 'NEXT: opascope-interrogate')
+
+    def test_home_skill_of_same_name_makes_project_install_use_long_name(self):
+        project = self.base / 'project'
+        project.mkdir()
+        other = self.home / '.agents/skills/session-handoff'
+        other.mkdir(parents=True)
+        (other / 'SKILL.md').write_text('other skill')
+        install.install(project, ['codex'])
+        self.assertTrue((project / '.agents/skills/opascope-session-handoff/SKILL.md').is_file())
+        self.assertTrue((project / '.agents/skills/planning/SKILL.md').is_file())
+        self.assertEqual((other / 'SKILL.md').read_text(), 'other skill')
+        # Claude does not read that folder, so a Claude install keeps the short name.
+        second = self.base / 'second'
+        second.mkdir()
+        install.install(second, ['claude'])
+        self.assertTrue((second / '.claude/skills/session-handoff/SKILL.md').is_file())
+
+    def test_own_home_install_does_not_push_project_to_long_names(self):
+        install.install(self.home, ['claude', 'codex'])
+        project = self.base / 'project'
+        project.mkdir()
+        install.install(project, ['claude', 'codex'])
+        short = sorted(p.name for p in install.skill_dirs(ROOT))
+        self.assertEqual(sorted(p.name for p in (project / '.claude/skills').iterdir()), short)
 
     def test_upgrade_leaves_no_empty_long_directory(self):
         self.old_install()

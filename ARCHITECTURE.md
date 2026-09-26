@@ -55,7 +55,8 @@ The receipt in the installation base records every created link and directory.
 Existing destinations are collisions unless the receipt owns them and their link
 targets still match. Each skill installs under its short name when that folder is
 free or owned. When something the receipt does not own holds the short name, that one
-skill installs as `opascope-<name>` instead, and the installer says so; nothing
+skill installs as `opascope-<name>` instead. The same holds for a project install when a
+home skill folder the runtime also reads gives that name to another skill, and the installer says so; nothing
 unowned is touched. If the long name is taken too, the install stops before changing
 anything. The receipt's `installed_as` records the name each skill got, and `kit.py
 start` names that folder in its NEXT line. An upgrade retires links under names no

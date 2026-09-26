@@ -15,6 +15,9 @@ RECEIPT = '.opascope-skills-install.json'
 LOCK = '.opascope-skills-install.lock'
 INDEX = '.opascope-skills-installs.json'
 LOCATIONS = {'claude': Path('.claude/skills'), 'codex': Path('.agents/skills')}
+# Every home folder a runtime also reads skills from. A project install cannot use
+# a short name one of these already gives to another skill: the runtime would load that one.
+HOME_LOCATIONS = {'claude': [Path('.claude/skills')], 'codex': [Path('.agents/skills'), Path('.codex/skills')]}
 
 
 def exists(path):
@@ -195,14 +198,39 @@ def long_name(name):
     return name if name == 'opascope' else 'opascope-' + name
 
 
+def shadowed(name, runtimes, base):
+    """True when a home skill folder the runtime also reads gives this name to another skill."""
+    try:
+        home = Path.home().resolve()
+    except (OSError, RuntimeError):
+        return False
+    if home == base:
+        return False
+    for runtime in runtimes:
+        for location in HOME_LOCATIONS[runtime]:
+            path = home / location / name
+            if not exists(path):
+                continue
+            try:
+                if ROOT in (path / 'SKILL.md').resolve(strict=True).parents:
+                    continue  # This package's own home install.
+            except (OSError, RuntimeError):
+                pass
+            return True
+    return False
+
+
 def install_names(base, runtimes, owned_directories):
     """The name each skill installs under: its short name, or its long name when
-    something this package does not own already holds the short one."""
+    something this package does not own already holds the short one, here or in
+    a home skill folder the runtime also reads."""
     names = {}
     for skill in skill_dirs(ROOT):
         short = skill.name
         taken = any(exists(base / LOCATIONS[r] / short) and
                     str(LOCATIONS[r] / short) not in owned_directories for r in runtimes)
+        if short != 'opascope' and not taken:
+            taken = shadowed(short, runtimes, base)
         names[short] = long_name(short) if taken else short
     return names
 

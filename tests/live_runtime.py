@@ -79,7 +79,9 @@ def main():
         install.install(project, [args.runtime])
         before = {relative: hashlib.sha256((project / relative).read_bytes()).hexdigest()
                   for relative in seed}
-        token = ('/' if args.runtime == 'claude' else '$') + name
+        # A skill whose short name is taken, here or at home, installs under its long name.
+        installed = (install.read_receipt(project) or {}).get('installed_as', {}).get(name, name)
+        token = ('/' if args.runtime == 'claude' else '$') + installed
         prompt = token + '\n' + request + '\nUse the installed skill by name. Do not ask for already supplied choices. No delegation or network calls. Keep the final answer brief, but keep any question block whole.'
         if args.runtime == 'claude':
             command = ['claude', '-p', '--output-format', 'stream-json', '--verbose', '--setting-sources', 'project',
