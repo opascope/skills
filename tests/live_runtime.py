@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -52,6 +53,12 @@ def final_text(output):
     return '\n'.join(spoken)
 
 
+def missing_env(contract, environ=None):
+    """The variables a contract needs that are not set. Such a contract is skipped."""
+    environ = os.environ if environ is None else environ
+    return [n for n in contract['fixture'].get('requires_env', []) if not environ.get(n)]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', choices=['claude', 'codex'], required=True)
@@ -64,6 +71,13 @@ def main():
     for name, contract in sorted(promise.contracts().items()):
         if args.only and args.only != name:
             continue
+        missing = missing_env(contract)
+        if missing:
+            # Neither kept nor broken: nothing ran, so nothing is claimed.
+            print(f'SKIP {name}: needs {", ".join(missing)}', flush=True)
+            continue
+        # A skill that calls a service needs the network and its key inside the session.
+        online = bool(contract['fixture'].get('requires_env'))
         request = contract['fixture']['request']
         project = Path(tempfile.mkdtemp(prefix='opascope-live-' + args.runtime + '-' + name + '-'))
         (evidence / (name + '-project.txt')).write_text(str(project) + '\n')
@@ -82,14 +96,22 @@ def main():
         # A skill whose short name is taken, here or at home, installs under its long name.
         installed = (install.read_receipt(project) or {}).get('installed_as', {}).get(name, name)
         token = ('/' if args.runtime == 'claude' else '$') + installed
-        prompt = token + '\n' + request + '\nUse the installed skill by name. Do not ask for already supplied choices. No delegation or network calls. Keep the final answer brief, but keep any question block whole.'
+        network = ('Network calls only through the requested skill\'s own script.' if online
+                   else 'No network calls.')
+        prompt = token + '\n' + request + '\nUse the installed skill by name. Do not ask for already supplied choices. No delegation. ' + network + ' Keep the final answer brief, but keep any question block whole.'
         if args.runtime == 'claude':
             command = ['claude', '-p', '--output-format', 'stream-json', '--verbose', '--setting-sources', 'project',
                        '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
                        '--permission-mode', 'acceptEdits', '--allowedTools', 'Skill,Read,Write,Edit,Glob,Grep,Bash',
                        '--no-session-persistence']
         else:
-            command = ['codex', 'exec', '--ignore-user-config', '--skip-git-repo-check', '--sandbox', 'workspace-write', '--json', '-']
+            command = ['codex', 'exec', '--ignore-user-config', '--skip-git-repo-check', '--sandbox', 'workspace-write', '--json']
+            if online:
+                # Codex hides variables named like keys from shell commands and blocks the
+                # network by default; the runner already passes only the one key.
+                command += ['-c', 'sandbox_workspace_write.network_access=true',
+                            '-c', 'shell_environment_policy.ignore_default_excludes=true']
+            command.append('-')
         print(f'Starting {args.runtime} {name}', flush=True)
         try:
             code, output = loops.execute(command, project, args.seconds, prompt)

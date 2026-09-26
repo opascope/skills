@@ -157,5 +157,16 @@ class OpenRouterTests(unittest.TestCase):
         self.assertIn('decision: skipped (decisions endpoint)', out)
 
 
+class LiveSkipTests(unittest.TestCase):
+    def test_contract_needing_an_unset_variable_is_skipped(self):
+        sys.path.insert(0, str(ROOT / 'tests'))
+        import live_runtime
+        import promise
+        contract = promise.contracts()['openrouter']
+        self.assertEqual(live_runtime.missing_env(contract, {}), ['OPENROUTER_API_KEY'])
+        self.assertEqual(live_runtime.missing_env(contract, {'OPENROUTER_API_KEY': 'set'}), [])
+        self.assertEqual(live_runtime.missing_env(promise.contracts()['planning'], {}), [])
+
+
 if __name__ == '__main__':
     unittest.main()
