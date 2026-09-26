@@ -13,7 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 SURFACES = ('artifact', 'output', 'project')
-CHECKS = ('present', 'absent', 'at_least', 'absent_path')
+CHECKS = ('present', 'absent', 'at_least', 'absent_path', 'rows')
 # 'at_least' pairs with exactly one of these. 'per' compares totals across the
 # whole text; 'per_block' splits on the pattern and requires a match in each.
 # They are separate keys because conflating them silently changed what the
@@ -63,6 +63,9 @@ def wellformed(name, contract):
         used = [c for c in CHECKS if c in assertion]
         if len(used) != 1:
             problems.append(f'{name}/{aid}: use exactly one of {", ".join(CHECKS)}')
+        if 'rows' in assertion and (assertion.get('on') != 'project' or
+                                    not isinstance(assertion.get('equals'), int)):
+            problems.append(f'{name}/{aid}: "rows" reads the project and needs an integer "equals"')
         if 'at_least' in assertion and sum(k in assertion for k in PER_KEYS) != 1:
             problems.append(f'{name}/{aid}: "at_least" needs exactly one of '
                             f'{", ".join(PER_KEYS)}')
@@ -93,6 +96,26 @@ def blocks(per, text):
     return [text[start:end] for start, end in zip(starts, starts[1:] + [len(text)])]
 
 
+def data_rows(path):
+    """Data lines in a CSV file, not counting the header."""
+    import csv
+    with open(path, newline='', encoding='utf-8-sig') as stream:
+        return max(0, sum(1 for row in csv.reader(stream) if row) - 1)
+
+
+def rows_match(project, pattern, equals):
+    """Every project file matching the glob holds exactly `equals` data rows.
+
+    No matching file fails: a run that wrote nothing has not run only the sample.
+    """
+    found = sorted(p for p in Path(project or '.').glob(pattern) if p.is_file())
+    if not found:
+        return False, f'no file matches {pattern}'
+    counts = {p.name: data_rows(p) for p in found}
+    wrong = {name: n for name, n in counts.items() if n != equals}
+    return not wrong, '' if not wrong else f'expected {equals} rows, found {wrong}'
+
+
 def evaluate(contract, artifact='', output='', project=None):
     """Run one contract's checks against what a real run produced."""
     results = []
@@ -102,6 +125,8 @@ def evaluate(contract, artifact='', output='', project=None):
         if 'absent_path' in assertion:
             target = Path(project or '.') / assertion['absent_path']
             passed, detail = not target.exists(), f'{assertion["absent_path"]} exists'
+        elif 'rows' in assertion:
+            passed, detail = rows_match(project, assertion['rows'], assertion['equals'])
         elif 'present' in assertion:
             hits = count(assertion['present'], surfaces.get(surface, ''))
             passed = hits >= assertion.get('min', 1)

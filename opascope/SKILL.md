@@ -21,6 +21,7 @@ Read [shared.md](shared.md) first. Route to the smallest useful workflow.
 | Find what to delete or compress | optimize |
 | Prepare bounded unattended execution | loop-builder |
 | Ask another model, research the web, or embed text | openrouter |
+| Label marketing rows by meaning with Jev, at scale | jevify |
 
 For a vague request, identify what is actually missing: intent, outcome, path,
 continuity, necessity or persistence. Recommend one skill and explain why in

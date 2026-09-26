@@ -1,0 +1,22 @@
+{
+  "name": "search-term-intent",
+  "fields": ["search_term"],
+  "shared_state": {
+    "offer": "REPLACE with one or two sentences on what you sell and to whom"
+  },
+  "questions": {
+    "buyer_intent": {
+      "type": "choice",
+      "instructions": "Given `offer`, what is the person who searched `search_term` most likely looking for? Judge only the words of the search term.",
+      "criteria": {
+        "buyer": "Could buy the offer now or soon: wants a product, price, provider, quote, demo or trial that matches the offer.",
+        "researcher": "Learning about the problem or category; might buy later.",
+        "wrong_product": "Wants something different that shares words with the offer.",
+        "job_or_free": "Looking for a job, a free alternative, a download, a course or a DIY method.",
+        "competitor_brand": "Searching for a named competitor's own site or product.",
+        "unclear": "Too short or ambiguous to call."
+      }
+    }
+  },
+  "cutoffs": {"buyer_intent": 0.9}
+}

@@ -37,7 +37,19 @@ BROKEN = {
     'openrouter':
         'model: typesafe/jev-router | chosen by: jev-router | cost: $0.00002 | tokens: 9/4 '
         '| id: gen-abc123\nkey used: sk-or-v1-0000fake\n',
+    # (artifact, output): jevify's promises are about what the run says and did,
+    # so the broken case needs an answer, not only a saved file.
+    'jevify': (
+        '{"questions": {"intent": {"type": "choice", "criteria": {"buyer": "a", "other": "b"}}}}\n',
+        'Labeled all 12 terms. The labels are 92% accurate. Used key sk-or-v1-0000fake.\n'
+        'Done.\n'),
 }
+
+
+def broken_case(name):
+    """A BROKEN entry as (artifact, output). Most are an artifact alone."""
+    value = BROKEN[name]
+    return value if isinstance(value, tuple) else (value, '')
 
 
 def project_where_the_work_was_done():
@@ -75,10 +87,11 @@ class PromiseContractTests(unittest.TestCase):
 
     def test_checks_fail_on_work_that_breaks_the_promise(self):
         """The gate is only worth running if a bad artifact actually trips it."""
-        for name, artifact in BROKEN.items():
+        for name in BROKEN:
+            artifact, output = broken_case(name)
             with self.subTest(name):
                 contract = promise.contracts()[name]
-                results = promise.evaluate(contract, artifact=artifact, output='',
+                results = promise.evaluate(contract, artifact=artifact, output=output,
                                            project=project_where_the_work_was_done())
                 broken = [r for r in results if not r['passed']]
                 self.assertTrue(broken, f'{name} accepted an artifact that breaks its promise')
@@ -92,9 +105,10 @@ class PromiseContractTests(unittest.TestCase):
         stopped matching. Naming the untripped ones is the only way that stays true
         as contracts are edited.
         """
-        for name, artifact in BROKEN.items():
+        for name in BROKEN:
+            artifact, output = broken_case(name)
             contract = promise.contracts()[name]
-            results = promise.evaluate(contract, artifact=artifact, output='',
+            results = promise.evaluate(contract, artifact=artifact, output=output,
                                        project=project_where_the_work_was_done())
             tripped = {r['id'] for r in results if not r['passed']}
             declared = {a['id'] for a in contract['assertions'] if a.get('adversarial')}
@@ -300,7 +314,24 @@ class PromiseContractTests(unittest.TestCase):
             '| tokens: 22/9 | id: gen-1790393512-AbCdEf\n',
             '9.9 is larger. deepseek/deepseek-v4.1-flash answered, for $0.0000384.\n'
             'Done.\nSaved the receipt.\n'),
+        'jevify': (
+            '{"questions": {"buyer_intent": {"type": "choice", "criteria": '
+            '{"buyer": "a", "researcher": "b", "unclear": "c"}}}}\n',
+            'Ran the 5-row sample for $0.0002. 2 rows are below the cutoff and need a person.\n'
+            'No one has checked the labels yet, so the cutoff is unchecked.\n'
+            'Done.\nSaved the job.\n'),
     }
+    # Files a compliant run leaves in the project, for checks that read the project.
+    KEEPS_PROJECT = {
+        'jevify': {'terms.search-term-intent.csv': 'search_term,buyer_intent\n' +
+                   ''.join(f'term {n},buyer\n' for n in range(5))},
+    }
+
+    def project_with(self, files):
+        root = Path(tempfile.mkdtemp())
+        for relative, body in files.items():
+            (root / relative).write_text(body)
+        return root
 
     def test_every_contract_passes_its_own_compliant_output(self):
         missing = sorted(set(promise.contracts()) - set(self.KEEPS))
@@ -310,10 +341,26 @@ class PromiseContractTests(unittest.TestCase):
             artifact, output = self.KEEPS[name]
             with self.subTest(name):
                 results = promise.evaluate(promise.contracts()[name], artifact=artifact,
-                                           output=output, project=Path(tempfile.mkdtemp()))
+                                           output=output,
+                                           project=self.project_with(self.KEEPS_PROJECT.get(name, {})))
                 self.assertEqual(
                     [(r['id'], r['detail']) for r in results if not r['passed']], [],
                     f'{name} failed output that keeps its promise')
+
+    def test_jevify_catches_a_run_of_the_whole_file(self):
+        rows = 'search_term,buyer_intent\n' + ''.join(f'term {n},buyer\n' for n in range(12))
+        artifact, output = self.KEEPS['jevify']
+        results = promise.evaluate(promise.contracts()['jevify'], artifact=artifact, output=output,
+                                   project=self.project_with({'terms.search-term-intent.csv': rows}))
+        self.assertEqual([r['id'] for r in results if not r['passed']], ['runs-only-the-sample'])
+
+    def test_rows_check_counts_data_lines(self):
+        five = 'a\n' + 'x\n' * 5
+        self.assertTrue(promise.rows_match(self.project_with({'t.j.csv': five}), 't.*.csv', 5)[0])
+        self.assertFalse(promise.rows_match(self.project_with({'t.j.csv': five}), 't.*.csv', 4)[0])
+        self.assertFalse(promise.rows_match(self.project_with({}), 't.*.csv', 5)[0])
+        self.assertFalse(promise.rows_match(self.project_with({'t.j.csv': 'a\n'}), 't.*.csv', 5)[0])
+        self.assertTrue(promise.rows_match(self.project_with({'t.j.csv': 'a\n'}), 't.*.csv', 0)[0])
 
     def test_checks_pass_on_work_that_keeps_it(self):
         good = ('This is solved when a reader can find each note by topic and every '

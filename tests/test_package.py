@@ -56,7 +56,7 @@ class InstallerTests(TemporaryTest):
         installed = snapshot(self.base)
         for location in install.LOCATIONS.values():
             skills = list((self.base / location).glob('*/SKILL.md'))
-            self.assertEqual(len(skills), 8)
+            self.assertEqual(len(skills), 9)
             for skill in skills:
                 self.assertEqual(skill.read_bytes(), (ROOT / skill.parent.name / 'SKILL.md').read_bytes())
                 self.assertTrue((skill.parent / 'kit.py').resolve().samefile(ROOT / 'kit.py'))
@@ -781,7 +781,7 @@ class StartTests(TemporaryTest):
 class PackageTests(unittest.TestCase):
     def test_every_skill_has_metadata_and_resolving_markdown_links(self):
         skills = [p / 'SKILL.md' for p in install.skill_dirs(ROOT)]
-        self.assertEqual(len(skills), 8)
+        self.assertEqual(len(skills), 9)
         import re
         for path in skills:
             text = path.read_text()
