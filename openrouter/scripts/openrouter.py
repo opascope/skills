@@ -135,7 +135,8 @@ def image_part(path):
     return {'type': 'image_url', 'image_url': {'url': f'data:{kind};base64,{data}'}}
 
 
-def chat_call(model, prompt, key, system=None, json_mode=False, max_tokens=None, effort=None, images=()):
+def chat_call(model, prompt, key, system=None, json_mode=False, max_tokens=None, effort=None, images=(),
+              router=False):
     content = prompt if not images else [{'type': 'text', 'text': prompt}] + [image_part(p) for p in images]
     messages = ([{'role': 'system', 'content': system}] if system else []) + [{'role': 'user', 'content': content}]
     body = {'model': model, 'messages': messages, 'usage': {'include': True}}
@@ -152,15 +153,18 @@ def chat_call(model, prompt, key, system=None, json_mode=False, max_tokens=None,
     text = (choice.get('message') or {}).get('content') or ''
     if not text.strip() and choice.get('finish_reason') == 'length':
         # A reasoning model can spend a small budget thinking and say nothing.
+        # The router picks its own effort and refuses a request that turns reasoning off.
         budget = (max_tokens or 1024) * 2
-        body['reasoning'] = {'enabled': False}
+        if not router:
+            body['reasoning'] = {'enabled': False}
         body['max_tokens'] = budget
         data = request(API + '/chat/completions', body, key)
         choice = (data.get('choices') or [{}])[0]
         text = (choice.get('message') or {}).get('content') or ''
         if not text.strip():
+            how = f'{budget} tokens' if router else f'reasoning off and {budget} tokens'
             raise Failure(f'{data.get("model") or model} returned an empty reply twice, the second time with '
-                          f'reasoning off and {budget} tokens. Raise --max-tokens or pick another model.')
+                          f'{how}. Raise --max-tokens or pick another model.')
     return text, data
 
 
@@ -192,7 +196,7 @@ def emit(args, answer, model, chosen_by, usage, generation=None, extra=None):
 def cmd_chat(args, roles, router):
     model, chosen_by, effort = choose(roles, router, 'chat', args.model, args.role, args.json, bool(args.image))
     text, data = chat_call(model, args.prompt, api_key(), args.system, args.json, args.max_tokens,
-                           args.effort or effort, args.image or ())
+                           args.effort or effort, args.image or (), router=chosen_by == 'jev-router')
     emit(args, text, data.get('model') or model, chosen_by, data.get('usage'), data.get('id'))
 
 
@@ -207,7 +211,7 @@ def cmd_research(args, roles, router):
 
 def cmd_pick(args, roles, router):
     model, chosen_by, _ = choose(roles, router, 'chat')
-    _, data = chat_call(model, args.prompt, api_key(), max_tokens=args.max_tokens)
+    _, data = chat_call(model, args.prompt, api_key(), max_tokens=args.max_tokens, router=True)
     picked = data.get('model') or model
     emit(args, picked, picked, chosen_by, data.get('usage'), data.get('id'))
 

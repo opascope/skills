@@ -44,8 +44,8 @@
     }
   },
   "router": {
-    "json": false,
-    "image": false,
+    "json": true,
+    "image": true,
     "note": "Whether the auto role (Jev router) honors --json and --image. Measured in references/auto-routing.md; when false, those calls go to the fast role."
   }
 }
