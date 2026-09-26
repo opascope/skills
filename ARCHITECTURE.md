@@ -42,7 +42,7 @@ sharing it, as they would any other working notes.
 
 ## One source, two discovery locations
 
-Canonical skills live in the `opascope*` folders at the repo root. Each installation creates a real
+Canonical skills live in the skill folders at the repo root. Each installation creates a real
 directory with links to its canonical skill's files, including shared `kit.py` and
 `shared.md` links. This keeps discovery flat without copying the skill text. Claude Code
 uses `.claude/skills`; Codex uses `.agents/skills`, either below the user's home or
@@ -107,7 +107,7 @@ record types and intentional undercounting are documented in `docs/usage.md`.
 Two gates hold as skills are added. Neither has a fixed skill list, so adding a
 skill never means editing a test.
 
-`opascope*/promise.json` states one skill's promise and the checks that would
+Each `<skill>/promise.json` states one skill's promise and the checks that would
 catch it breaking that promise. A skill is instructions, so the only honest proof
 is running it and reading the result; the checks turn that reading into pass or
 fail. Each contract also carries the fixture request that produces the result.

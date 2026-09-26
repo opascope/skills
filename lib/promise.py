@@ -22,9 +22,15 @@ CHECKS = ('present', 'absent', 'at_least', 'absent_path')
 PER_KEYS = ('per', 'per_block')
 
 
+def skill_dirs():
+    """A skill is a top-level folder that holds a SKILL.md."""
+    return sorted(p for p in ROOT.iterdir()
+                  if p.is_dir() and not p.name.startswith('.') and (p / 'SKILL.md').is_file())
+
+
 def contracts():
     found = {}
-    for path in sorted(ROOT.glob('opascope*/promise.json')):
+    for path in sorted(p / 'promise.json' for p in skill_dirs() if (p / 'promise.json').is_file()):
         found[path.parent.name] = json.loads(path.read_text())
     return found
 
@@ -152,7 +158,7 @@ def main():
             print(f'{name}\n  promise: {contract["promise"]}\n  '
                   f'{len(contract["assertions"])} checks, {adversarial} adversarial')
         return 0
-    installed = {p.name for p in ROOT.glob('opascope*') if (p / 'SKILL.md').is_file()}
+    installed = {p.name for p in skill_dirs()}
     problems = [f'{name}: installed with no promise.json' for name in sorted(installed - set(found))]
     for name, contract in found.items():
         problems += wellformed(name, contract)

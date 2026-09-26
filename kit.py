@@ -137,11 +137,11 @@ def next_step(task, saved):
         return 'follow the latest handoff'
     if (task / 'seal.json').exists():
         return 'continue the sealed loop: kit.py loop run'
-    for kind, step in (('plan', 'do the work, or opascope-loop-builder to run it unattended'),
-                       ('objective', 'opascope-planning'), ('brief', 'opascope-define-done')):
+    for kind, step in (('plan', 'do the work, or loop-builder to run it unattended'),
+                       ('objective', 'planning'), ('brief', 'define-done')):
         if kind in kinds:
             return step
-    return 'opascope-interrogate'
+    return 'interrogate'
 
 
 def start(path, task_id=None):
@@ -161,7 +161,7 @@ def start(path, task_id=None):
         else:
             print(f'PACKAGE: {local} (up to date)')
     if not root.exists():
-        print('PROJECT: new\nNEXT: opascope-interrogate')
+        print('PROJECT: new\nNEXT: interrogate')
         return
     tasks = sorted((p.parent for p in root.glob('*/task.json') if not p.parent.is_symlink()), key=lambda p: p.name)
     print(f'PROJECT: known, {len(tasks)} task{"" if len(tasks) == 1 else "s"}')
@@ -175,7 +175,7 @@ def start(path, task_id=None):
         print(f'NEXT: {next_step(task, saved)}')
         return
     if not tasks:
-        print('NEXT: opascope-interrogate')
+        print('NEXT: interrogate')
     for task in tasks:
         saved = artifacts(task)
         kinds = list(dict.fromkeys(kind for kind, _ in saved))

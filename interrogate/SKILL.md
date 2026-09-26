@@ -1,5 +1,5 @@
 ---
-name: opascope-interrogate
+name: interrogate
 description: Surface the guesses in a task before starting. Use when asked to interrogate, grill, ask questions first, or clarify an underspecified request. Produces a short execution brief and only asks questions that would change the work.
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 metadata:

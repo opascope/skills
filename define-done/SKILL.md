@@ -1,5 +1,5 @@
 ---
-name: opascope-define-done
+name: define-done
 description: Turn a sprawling problem into one end-state sentence you can check as true or false. Use when asked to define done, state the objective, say what solved looks like, or specify a completion condition. Produces the objective, not the implementation.
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 metadata:
@@ -38,6 +38,6 @@ An objective can name a future output. Mark it as expected, verify the parent
 and inputs now, and identify the later command that proves the output. Never
 claim a future pointer already resolves.
 
-If the user asks for steps, pass the objective to opascope-planning. If they ask
-for unattended execution, pass it to opascope-loop-builder. Alignment alone
+If the user asks for steps, pass the objective to planning. If they ask
+for unattended execution, pass it to loop-builder. Alignment alone
 does not trigger either workflow. Return the sentence and its artifact path.

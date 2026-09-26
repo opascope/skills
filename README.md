@@ -45,13 +45,13 @@ Leave the cloned folder where it is. The installed links point back to it.
 After you install, try one skill. In Claude Code:
 
 ```text
-/opascope-define-done I keep losing notes. What would solved look like?
+/define-done I keep losing notes. What would solved look like?
 ```
 
 In Codex CLI:
 
 ```text
-$opascope-define-done I keep losing notes. What would solved look like?
+$define-done I keep losing notes. What would solved look like?
 ```
 
 If you are unsure where to start, type `/opascope` or `$opascope`.
@@ -72,38 +72,38 @@ Skill names start with `opascope-`. To choose, use `opascope`. The same files se
 
 ### How do I stop an agent from guessing at requirements?
 
-**`opascope-interrogate`** drafts the plan it is about to execute. It labels every claim SAID (you supplied it), FOUND (verified, with source), or GUESSED (an assumption). A plausible inference still counts as GUESSED. It resolves what the environment can answer before involving you. It asks at most three independent questions per round. Scope-changing ones come first.
+**`interrogate`** drafts the plan it is about to execute. It labels every claim SAID (you supplied it), FOUND (verified, with source), or GUESSED (an assumption). A plausible inference still counts as GUESSED. It resolves what the environment can answer before involving you. It asks at most three independent questions per round. Scope-changing ones come first.
 
 Zero questions is a valid result, and it will not invent uncertainty to look thorough.
 
 ### How do I define "done" for an AI coding task?
 
-**`opascope-define-done`** produces one sentence you can check as true or false. It describes the observable world after the work, not the implementation. It runs a trap test: could every clause be true while the original problem remains? If so, the missing pain goes into the objective.
+**`define-done`** produces one sentence you can check as true or false. It describes the observable world after the work, not the implementation. It runs a trap test: could every clause be true while the original problem remains? If so, the missing pain goes into the objective.
 
 - Solution framing, rejected: "Create a searchable folder."
 - End-state framing, accepted: "This is solved when a reader can find each note from its topic, and every original note is preserved byte-for-byte."
 
 ### How do I make an agent plan with verifiable steps?
 
-**`opascope-planning`** gives each step one action, its dependencies, a check that passes or fails, and a place to find proof. A step without a check is an assumption about success.
+**`planning`** gives each step one action, its dependencies, a check that passes or fails, and a place to find proof. A step without a check is an assumption about success.
 
 Where an independent reviewer is available it uses one. Where none exists it runs three sequential passes: feasibility, coverage, scope. It labels the result "sequential self-review, not independent".
 
 ### How do I hand off context between agent sessions?
 
-**`opascope-session-handoff`** cross-checks conversation claims against the current files, command results, and git status before writing anything. A directory listing proves a file exists. It says nothing about whether content changed. It publishes a handoff that cannot be changed, then runs the resume command to prove the pickup works.
+**`session-handoff`** cross-checks conversation claims against the current files, command results, and git status before writing anything. A directory listing proves a file exists. It says nothing about whether content changed. It publishes a handoff that cannot be changed, then runs the resume command to prove the pickup works.
 
 A new session picks up with "use opascope to resume my notes task". Nothing is injected into your startup files and no automatic pickup is claimed.
 
 ### What can I delete from this codebase or process?
 
-**`opascope-optimize`** audits with removal as the starting point and never changes the audited target. Every part gets one label, with evidence: `KILL`, `COMPRESS`, `KEEP`, or `QUESTION`.
+**`optimize`** audits with removal as the starting point and never changes the audited target. Every part gets one label, with evidence: `KILL`, `COMPRESS`, `KEEP`, or `QUESTION`.
 
 Before any `KILL` it builds the strongest evidence-based case for keeping the part. It shows why that case does or does not survive. The audit treats inactivity as a signal to investigate, not a deadline. Absence of a recorded incident does not show a safety net is unnecessary.
 
 ### How do I run Claude Code or Codex unattended without false completions?
 
-**`opascope-loop-builder`** prepares a loop with a limit you set. It saves files as it goes. It uses criteria you can check. Then a small foreground Python process runs it.
+**`loop-builder`** prepares a loop with a limit you set. It saves files as it goes. It uses criteria you can check. Then a small foreground Python process runs it.
 
 - Proofs are argument arrays, never shell strings, executed by the parent process.
 - A worker's claim that an item is done proves nothing. The runner checks.
@@ -122,7 +122,7 @@ python3 kit.py loop run /path/to/task --runtime codex  --steps 10 --seconds 300
 
 | | Claude Code | Codex CLI |
 |---|---|---|
-| Invocation | `/opascope-define-done` | `$opascope-define-done` |
+| Invocation | `/define-done` | `$define-done` |
 | Discovery path | `.claude/skills` | `.agents/skills` |
 | Loop adapter | `claude -p`, acceptEdits, Read/Write/Edit/Bash | `codex exec --sandbox workspace-write` |
 | Questions | Interactive question tool | Question tool, else one fixed text shape with a recommendation |

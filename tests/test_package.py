@@ -60,7 +60,7 @@ class InstallerTests(TemporaryTest):
         self.assertEqual(snapshot(self.base), before)
 
     def test_preexisting_empty_skill_directory_is_collision(self):
-        target = self.base / '.agents/skills/opascope-planning'
+        target = self.base / '.agents/skills/planning'
         target.mkdir(parents=True)
         before = snapshot(self.base)
         with self.assertRaisesRegex(ValueError, 'Collisions'):
@@ -410,15 +410,15 @@ class ArtifactTests(TemporaryTest):
 class MeasurementTests(TemporaryTest):
     def test_malformed_record_shapes_do_not_abort_scan(self):
         rows = [{'type': 'user', 'message': None}, {'type': 'session_meta', 'payload': []},
-                {'type': 'user', 'message': {'content': '$opascope-planning'}}]
+                {'type': 'user', 'message': {'content': '$planning'}}]
         (self.base / 'shapes.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
         result = measurement.measure([self.base])
         self.assertEqual(result['malformed_lines'], 2)
-        self.assertEqual(result['ranking'], [{'skill': 'opascope-planning', 'sessions': 1}])
+        self.assertEqual(result['ranking'], [{'skill': 'planning', 'sessions': 1}])
 
     def test_catalog_filters_builtin_markup_and_unknown_prose(self):
-        record = {'type': 'user', 'message': {'content': '<command-name>/model</command-name> /copy /unknown $opascope-planning'}}
-        self.assertEqual(measurement.invocations(record, {'opascope-planning'}), {'opascope-planning'})
+        record = {'type': 'user', 'message': {'content': '<command-name>/model</command-name> /copy /unknown $planning'}}
+        self.assertEqual(measurement.invocations(record, {'planning'}), {'planning'})
         record = {'type': 'user', 'message': {'content': '/old-skill'}}
         self.assertEqual(measurement.invocations(record, {'old-skill'}), {'old-skill'})
 
@@ -429,18 +429,18 @@ class MeasurementTests(TemporaryTest):
     def test_session_dedup_and_invocation_only(self):
         rows = [
             {'type': 'session_meta', 'payload': {'id': 'test-session'}},
-            {'type': 'response_item', 'payload': {'role': 'user', 'content': [{'type': 'input_text', 'text': '$opascope-planning do this'}]}},
-            {'type': 'event_msg', 'payload': {'type': 'user_message', 'message': '$opascope-planning do this'}},
-            {'type': 'response_item', 'payload': {'role': 'assistant', 'content': [{'type': 'output_text', 'text': '$opascope-optimize mentioned'}]}},
-            {'type': 'user', 'message': {'content': '`$opascope-optimize` and ```\n/opascope-interrogate\n```'}},
-            {'type': 'user', 'message': {'content': '<INSTRUCTIONS> /opascope-optimize </INSTRUCTIONS>'}},
+            {'type': 'response_item', 'payload': {'role': 'user', 'content': [{'type': 'input_text', 'text': '$planning do this'}]}},
+            {'type': 'event_msg', 'payload': {'type': 'user_message', 'message': '$planning do this'}},
+            {'type': 'response_item', 'payload': {'role': 'assistant', 'content': [{'type': 'output_text', 'text': '$optimize mentioned'}]}},
+            {'type': 'user', 'message': {'content': '`$optimize` and ```\n/interrogate\n```'}},
+            {'type': 'user', 'message': {'content': '<INSTRUCTIONS> /optimize </INSTRUCTIONS>'}},
         ]
         text = '\n'.join(json.dumps(x) for x in rows)
         (self.base / 'one.jsonl').write_text(text + '\ninvalid\n')
         (self.base / 'copy.jsonl').write_text(text)
         before = snapshot(self.base)
         result = measurement.measure([self.base])
-        self.assertEqual(result['ranking'], [{'skill': 'opascope-planning', 'sessions': 1}])
+        self.assertEqual(result['ranking'], [{'skill': 'planning', 'sessions': 1}])
         self.assertEqual(result['sessions'], 1)
         self.assertEqual(result['malformed_lines'], 1)
         self.assertIn('Undercounts', result['limitation'])
@@ -449,7 +449,7 @@ class MeasurementTests(TemporaryTest):
     def test_claude_skill_call_and_command(self):
         rows = [
             {'type': 'user', 'sessionId': 'toy', 'message': {'content': '<command-name>/opascope</command-name>'}},
-            {'type': 'assistant', 'sessionId': 'toy', 'message': {'content': [{'type': 'tool_use', 'name': 'Skill', 'input': {'skill': 'opascope-planning'}}]}},
+            {'type': 'assistant', 'sessionId': 'toy', 'message': {'content': [{'type': 'tool_use', 'name': 'Skill', 'input': {'skill': 'planning'}}]}},
         ]
         (self.base / 'session.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
         self.assertEqual(len(measurement.measure([self.base])['ranking']), 2)
@@ -566,13 +566,13 @@ class StartTests(TemporaryTest):
 
     def test_new_project_creates_nothing(self):
         lines = self.start()
-        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: opascope-interrogate'])
+        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: interrogate'])
         self.assertEqual(list(self.base.iterdir()), [])
 
     def test_next_step_follows_what_is_saved(self):
-        cases = [((), 'opascope-interrogate'), (('brief',), 'opascope-define-done'),
-                 (('brief', 'objective'), 'opascope-planning'),
-                 (('brief', 'objective', 'plan'), 'do the work, or opascope-loop-builder to run it unattended'),
+        cases = [((), 'interrogate'), (('brief',), 'define-done'),
+                 (('brief', 'objective'), 'planning'),
+                 (('brief', 'objective', 'plan'), 'do the work, or loop-builder to run it unattended'),
                  (('plan', 'handoff'), 'follow the latest handoff')]
         for kinds, expected in cases:
             with self.subTest(kinds=kinds):
@@ -586,7 +586,7 @@ class StartTests(TemporaryTest):
 
     def test_handoff_only_wins_when_newest(self):
         task = self.task('handoff', 'objective')
-        self.assertEqual(self.start(task.name)[-1], 'NEXT: opascope-planning')
+        self.assertEqual(self.start(task.name)[-1], 'NEXT: planning')
 
     def test_two_tasks_list_without_choosing(self):
         first, second = self.task('brief'), self.task()
@@ -606,7 +606,7 @@ class StartTests(TemporaryTest):
 
     def test_optimization_alone_does_not_change_next(self):
         task = self.task('optimization')
-        self.assertEqual(self.start(task.name)[-1], 'NEXT: opascope-interrogate')
+        self.assertEqual(self.start(task.name)[-1], 'NEXT: interrogate')
         self.assertIn('| saved: optimization |', self.start()[-1])
 
     def test_newer_local_tag_is_reported(self):
@@ -620,11 +620,11 @@ class StartTests(TemporaryTest):
         with patch.object(kit, 'git', side_effect=subprocess.SubprocessError('no git')):
             lines = self.start()
         self.assertEqual(lines[0], 'PACKAGE: %s (update check unavailable)' % (ROOT / 'VERSION').read_text().strip())
-        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: opascope-interrogate'])
+        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: interrogate'])
 
     def test_owned_directory_without_tasks(self):
         kit.artifact_root(self.base, create=True)
-        self.assertEqual(self.start()[1:], ['PROJECT: known, 0 tasks', 'NEXT: opascope-interrogate'])
+        self.assertEqual(self.start()[1:], ['PROJECT: known, 0 tasks', 'NEXT: interrogate'])
 
     def test_task_detail_names_latest_handoff(self):
         task = self.task('brief', 'handoff')
@@ -637,7 +637,7 @@ class StartTests(TemporaryTest):
 
 class PackageTests(unittest.TestCase):
     def test_every_skill_has_metadata_and_resolving_markdown_links(self):
-        skills = list(ROOT.glob('opascope*/SKILL.md'))
+        skills = [p / 'SKILL.md' for p in install.skill_dirs(ROOT)]
         self.assertEqual(len(skills), 7)
         import re
         for path in skills:

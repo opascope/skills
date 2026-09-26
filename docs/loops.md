@@ -1,7 +1,7 @@
 # Running an unattended Claude Code or Codex loop with real proofs
 
 The loop-builder skill writes the contract described in its
-[reference](../opascope-loop-builder/references/contract.md). A loop task
+[reference](../loop-builder/references/contract.md). A loop task
 is created by `kit.py new`, so its files are stored the same way as every other
 skill's. All file paths in proof arguments are relative to the project root
 unless absolute. Keep verifier scripts within that project and list them in

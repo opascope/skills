@@ -52,7 +52,8 @@ NAME_TOKENS = (1, 3)
 
 
 def skills():
-    return sorted(p for p in ROOT.glob('opascope*') if (p / 'SKILL.md').is_file())
+    return sorted(p for p in ROOT.iterdir()
+                  if p.is_dir() and not p.name.startswith('.') and (p / 'SKILL.md').is_file())
 
 
 def description(skill):
@@ -209,7 +210,7 @@ def check():
                  'write it so adding a skill does not date the sentence')
 
     for path in sorted(ROOT.glob('*.md')) + sorted(ROOT.glob('docs/*.md')) + \
-            sorted(ROOT.glob('opascope*/**/*.md')):
+            sorted(p for s in skills() for p in s.glob('**/*.md')):
         for link in outside_links(path.read_text()):
             fail(findings, str(path.relative_to(ROOT)),
                  f'links to another account: {link}',
@@ -218,7 +219,7 @@ def check():
     table = {name: sentence.strip() for name, sentence in re.findall(
         r'^\|\s*`?([a-z][a-z0-9-]*)`?\s*\|\s*(.+?)\s*\|\s*$', readme, re.M)}
     promised = {}
-    for path in ROOT.glob('opascope*/promise.json'):
+    for path in (s / 'promise.json' for s in skills() if (s / 'promise.json').is_file()):
         try:
             promised[path.parent.name] = json.loads(path.read_text()).get('promise', '')
         except (OSError, ValueError):
@@ -227,10 +228,7 @@ def check():
         name = skill.name
         # The router used to be exempt here, which is how its promise sentence
         # came to say the opposite of what it does without anything noticing.
-        if name != 'opascope' and not name.startswith('opascope-'):
-            fail(findings, name, 'skill directory is missing the opascope- prefix')
-            continue
-        bare = name[len('opascope-'):] if name.startswith('opascope-') else name
+        bare = name
         parts = bare.split('-')
         if not NAME_TOKENS[0] <= len(parts) <= NAME_TOKENS[1]:
             fail(findings, name, f'name has {len(parts)} words, keep it to '

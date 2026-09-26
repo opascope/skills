@@ -181,6 +181,12 @@ def installed_bases(root=None):
     return found, stale
 
 
+def skill_dirs(root):
+    """A skill is a top-level folder that holds a SKILL.md."""
+    return sorted(p for p in Path(root).iterdir()
+                  if p.is_dir() and not p.name.startswith('.') and (p / 'SKILL.md').is_file())
+
+
 def matching_link(path, target):
     return path.is_symlink() and os.readlink(path) == target
 
@@ -188,9 +194,7 @@ def matching_link(path, target):
 def desired_links(base, runtimes):
     links = {}
     for runtime in runtimes:
-        for skill in sorted(ROOT.glob('opascope*')):
-            if not (skill / 'SKILL.md').is_file():
-                continue
+        for skill in skill_dirs(ROOT):
             for source in sorted(skill.iterdir()):
                 if source.name.startswith('.') or source.name == '__pycache__':
                     continue

@@ -14,12 +14,12 @@ Read [shared.md](shared.md) first. Route to the smallest useful workflow.
 
 | Need | Skill |
 |---|---|
-| Expose guesses before starting | opascope-interrogate |
-| State what solved means | opascope-define-done |
-| Turn scope into verified steps | opascope-planning |
-| Leave or resume cold-session context | opascope-session-handoff |
-| Find what to delete or compress | opascope-optimize |
-| Prepare bounded unattended execution | opascope-loop-builder |
+| Expose guesses before starting | interrogate |
+| State what solved means | define-done |
+| Turn scope into verified steps | planning |
+| Leave or resume cold-session context | session-handoff |
+| Find what to delete or compress | optimize |
+| Prepare bounded unattended execution | loop-builder |
 
 For a vague request, identify what is actually missing: intent, outcome, path,
 continuity, necessity or persistence. Recommend one skill and explain why in
@@ -46,4 +46,4 @@ Repeat --base for multiple known installations. Do not stash, reset or overwrite
 local changes to make an update succeed. On failure, report the exact condition.
 This is the package's upgrade workflow; no separate upgrade skill is installed.
 
-For pickup, `python3 "KIT" start` lists tasks with what each has saved and its next step, without inventing a global current task. Select the intended task and route to opascope-session-handoff's resume path.
+For pickup, `python3 "KIT" start` lists tasks with what each has saved and its next step, without inventing a global current task. Select the intended task and route to session-handoff's resume path.

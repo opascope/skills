@@ -8,7 +8,7 @@
       "id": "names-the-right-one",
       "why": "Routing is the whole job. A general answer sends the reader back to guessing.",
       "on": "output",
-      "present": "opascope-define-done",
+      "present": "define-done",
       "min": 1
     },
     {
