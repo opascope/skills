@@ -60,12 +60,124 @@ class InstallerTests(TemporaryTest):
         self.assertEqual(snapshot(self.base), before)
 
     def test_preexisting_empty_skill_directory_is_collision(self):
-        target = self.base / '.agents/skills/planning'
+        # A stray long-name folder no longer blocks anything: planning installs
+        # under its short name and the stray folder is left as it was.
+        target = self.base / '.agents/skills/opascope-planning'
         target.mkdir(parents=True)
+        install.install(self.base, ['claude', 'codex'])
+        self.assertTrue((self.base / '.agents/skills/planning/SKILL.md').is_file())
+        self.assertTrue(target.is_dir())
+        self.assertEqual(list(target.iterdir()), [])
+
+    def names(self, location='.claude/skills'):
+        return sorted(p.name for p in (self.base / location).iterdir() if (p / 'SKILL.md').exists())
+
+    def dangling(self):
+        return [p for p in self.base.rglob('*') if p.is_symlink() and not p.exists()]
+
+    def old_install(self):
+        """A v0.5.x install: links under opascope-<name>, pointing where the old folders were."""
+        links, directories = {}, {'.claude', '.claude/skills', '.agents', '.agents/skills'}
+        for location in install.LOCATIONS.values():
+            for skill in install.skill_dirs(ROOT):
+                name = install.long_name(skill.name)
+                directories.add(str(location / name))
+                (self.base / location / name).mkdir(parents=True, exist_ok=True)
+                for source in sorted(skill.iterdir()):
+                    if source.name.startswith('.') or source.name == '__pycache__':
+                        continue
+                    relative = str(location / name / source.name)
+                    links[relative] = str(ROOT / name / source.name)
+                    (self.base / relative).symlink_to(links[relative])
+        (self.base / install.RECEIPT).write_text(json.dumps({
+            'package': 'opascope-skills', 'schema': 1, 'source': str(ROOT),
+            'runtimes': ['claude', 'codex'], 'directories': sorted(directories), 'links': links}))
+
+    def taken(self):
+        other = self.base / '.claude/skills/interrogate'
+        other.mkdir(parents=True)
+        (other / 'SKILL.md').write_text('other skill')
+        return other
+
+    def test_fresh_install_uses_short_names(self):
+        install.install(self.base, ['claude', 'codex'])
+        short = sorted(p.name for p in install.skill_dirs(ROOT))
+        for location in install.LOCATIONS.values():
+            self.assertEqual(self.names(location), short)
+        receipt = install.read_receipt(self.base)
+        self.assertEqual(receipt['installed_as'], {n: n for n in short})
+
+    def test_taken_short_name_installs_long_name(self):
+        other = self.taken()
+        before = snapshot(other)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            install.install(self.base, ['claude', 'codex'])
+        notes = [l for l in out.getvalue().splitlines() if 'already taken' in l]
+        self.assertEqual(notes, ['interrogate: that name is already taken here, so it installs as opascope-interrogate.'])
+        self.assertEqual(snapshot(other), before)
+        self.assertEqual((other / 'SKILL.md').read_text(), 'other skill')
+        for location in install.LOCATIONS.values():
+            names = self.names(location)
+            self.assertIn('opascope-interrogate', names)
+            self.assertIn('planning', names)
+        self.assertEqual(install.read_receipt(self.base)['installed_as']['interrogate'], 'opascope-interrogate')
+
+    def test_long_name_also_taken_aborts(self):
+        self.taken()
+        (self.base / '.claude/skills/opascope-interrogate').mkdir()
         before = snapshot(self.base)
         with self.assertRaisesRegex(ValueError, 'Collisions'):
             install.install(self.base, ['claude', 'codex'])
-        self.assertEqual(before, snapshot(self.base))
+        self.assertEqual(snapshot(self.base), before)
+
+    def test_upgrade_from_long_names_retires_old_links(self):
+        self.old_install()
+        install.install(self.base, ['claude', 'codex'])
+        short = sorted(p.name for p in install.skill_dirs(ROOT))
+        for location in install.LOCATIONS.values():
+            self.assertEqual(sorted(p.name for p in (self.base / location).iterdir()), short)
+        self.assertEqual(self.dangling(), [])
+
+    def test_upgrade_with_taken_short_name_keeps_long_links(self):
+        self.old_install()
+        self.taken()
+        install.install(self.base, ['claude', 'codex'])
+        self.assertTrue((self.base / '.claude/skills/opascope-interrogate/SKILL.md').is_file())
+        self.assertEqual((self.base / '.claude/skills/interrogate/SKILL.md').read_text(), 'other skill')
+        self.assertTrue((self.base / '.claude/skills/planning/SKILL.md').is_file())
+        self.assertEqual(self.dangling(), [])
+
+    def test_uninstall_after_fallback_removes_only_owned(self):
+        other = self.taken()
+        before = snapshot(self.base)
+        install.install(self.base, ['claude', 'codex'])
+        install.uninstall(self.base)
+        self.assertEqual(snapshot(self.base), before)
+        self.assertEqual((other / 'SKILL.md').read_text(), 'other skill')
+
+    def test_start_names_installed_skill(self):
+        project = self.base / 'project'
+        project.mkdir()
+        kit_path = self.base / '.claude/skills/planning/kit.py'
+
+        def next_line():
+            done = subprocess.run([sys.executable, str(kit_path), 'start', '--project', str(project)],
+                                  capture_output=True, text=True, check=True)
+            return done.stdout.splitlines()[-1]
+        install.install(self.base, ['claude'])
+        self.assertEqual(next_line(), 'NEXT: interrogate')
+        install.uninstall(self.base)
+        self.taken()
+        install.install(self.base, ['claude'])
+        self.assertEqual(next_line(), 'NEXT: opascope-interrogate')
+
+    def test_upgrade_leaves_no_empty_long_directory(self):
+        self.old_install()
+        install.install(self.base, ['claude', 'codex'])
+        for location in install.LOCATIONS.values():
+            self.assertEqual([p.name for p in (self.base / location).iterdir() if p.name.startswith('opascope-')], [])
+        receipt = install.read_receipt(self.base)
+        self.assertFalse([d for d in receipt['directories'] if 'opascope-' in d])
 
     def test_dangling_link_and_parent_link_are_collisions(self):
         target = self.base / '.claude'

@@ -47,3 +47,5 @@ local changes to make an update succeed. On failure, report the exact condition.
 This is the package's upgrade workflow; no separate upgrade skill is installed.
 
 For pickup, `python3 "KIT" start` lists tasks with what each has saved and its next step, without inventing a global current task. Select the intended task and route to session-handoff's resume path.
+
+If a skill was installed under its long name because the short one was taken, use `opascope-<name>`.

@@ -191,14 +191,31 @@ def matching_link(path, target):
     return path.is_symlink() and os.readlink(path) == target
 
 
-def desired_links(base, runtimes):
+def long_name(name):
+    return name if name == 'opascope' else 'opascope-' + name
+
+
+def install_names(base, runtimes, owned_directories):
+    """The name each skill installs under: its short name, or its long name when
+    something this package does not own already holds the short one."""
+    names = {}
+    for skill in skill_dirs(ROOT):
+        short = skill.name
+        taken = any(exists(base / LOCATIONS[r] / short) and
+                    str(LOCATIONS[r] / short) not in owned_directories for r in runtimes)
+        names[short] = long_name(short) if taken else short
+    return names
+
+
+def desired_links(base, runtimes, names=None):
     links = {}
     for runtime in runtimes:
         for skill in skill_dirs(ROOT):
+            name = (names or {}).get(skill.name, skill.name)
             for source in sorted(skill.iterdir()):
                 if source.name.startswith('.') or source.name == '__pycache__':
                     continue
-                destination = LOCATIONS[runtime] / skill.name / source.name
+                destination = LOCATIONS[runtime] / name / source.name
                 links[str(destination)] = str(source)
     if not links:
         raise ValueError('No skills found in this checkout')
@@ -216,7 +233,8 @@ def install(base, runtimes):
             raise ValueError('This base belongs to a different checkout. Uninstall that checkout first.')
         previous = prior or {'links': {}, 'directories': [], 'runtimes': []}
         runtimes = sorted(set(runtimes) | set(previous['runtimes']))
-        desired = desired_links(base, runtimes)
+        names = install_names(base, runtimes, previous['directories'])
+        desired = desired_links(base, runtimes, names)
         conflicts = []
         for relative, target in desired.items():
             dest = base / relative
@@ -255,6 +273,7 @@ def install(base, runtimes):
             receipt = {
                 'package': 'opascope-skills', 'schema': 1, 'source': str(ROOT),
                 'runtimes': runtimes,
+                'installed_as': names,
                 'directories': sorted(set(previous['directories'] + created_dirs)),
                 'links': {**previous['links'], **desired},
             }
@@ -298,8 +317,24 @@ def install(base, runtimes):
             elif exists(path):
                 print(f'Preserved changed retired entry: {path}')
                 retained[relative] = target
-        if set(receipt['links']) != set(desired) | set(retained):
+        # Owned skill directories that retired links left empty go too, so an
+        # upgrade from the long names leaves no empty folder behind.
+        needed = {str(Path(r).parent) for r in {**desired, **retained}}
+        removed = []
+        for relative in sorted(receipt['directories'], key=lambda s: len(Path(s).parts), reverse=True):
+            path = base / relative
+            if len(Path(relative).parts) != 3 or any(n == relative or n.startswith(relative + '/') for n in needed):
+                continue
+            if path.is_symlink() or not path.is_dir():
+                continue
+            try:
+                path.rmdir()
+                removed.append(relative)
+            except OSError:
+                pass
+        if removed or set(receipt['links']) != set(desired) | set(retained):
             receipt['links'] = {**desired, **retained}
+            receipt['directories'] = [d for d in receipt['directories'] if d not in removed]
             temporary = base / (RECEIPT + '.' + uuid.uuid4().hex)
             with temporary.open('x') as stream:
                 json.dump(receipt, stream, indent=2)
@@ -307,6 +342,9 @@ def install(base, runtimes):
             temporary.replace(base / RECEIPT)
         # Still under the base lock, so a racing uninstall cannot be undone by this entry.
         record(add=[str(base)])
+    for short, name in sorted(names.items()):
+        if name != short:
+            print(f'{short}: that name is already taken here, so it installs as {name}.')
     print(f'Installed {len(desired)} links for {", ".join(runtimes)} in {base}')
     print('Open a new session. Claude Code: /opascope | Codex: $opascope')
     print('Try: define done for sorting a folder of notes without losing any.')
