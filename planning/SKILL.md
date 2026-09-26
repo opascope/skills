@@ -1,5 +1,5 @@
 ---
-name: opascope-planning
+name: planning
 description: Write an executable plan whose steps each have a pass/fail check. Use for nontrivial tasks with dependencies, multiple sources or tools, or a deliverable, and whenever asked to plan or break work down. Supports code, research and ordinary workflows.
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion Agent
 metadata:

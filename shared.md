@@ -2,6 +2,7 @@
 
 Read this file at the start of every skill. Resolve `kit.py` beside the loaded
 SKILL.md, using its full path. It is a link to the package's shared helper. Run
+it by that path, not by the file the link points to. Run
 commands from the user's project, not from the package directory. In commands
 below, replace KIT with that actual path; do not type KIT literally.
 

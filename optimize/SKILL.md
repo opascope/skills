@@ -1,5 +1,5 @@
 ---
-name: opascope-optimize
+name: optimize
 description: Audit a process, codebase or workflow for deletion and compression. Use when asked what can be deleted, what is unnecessary, or to simplify a process. Produces recommendations only and never changes the audited target.
 allowed-tools: Read Glob Grep Bash Write
 metadata:

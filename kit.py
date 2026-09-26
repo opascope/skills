@@ -130,6 +130,22 @@ def artifacts(task):
     return [(kind, p) for _, kind, p in sorted(found)]
 
 
+def installed_name(name):
+    """The name a skill is installed under beside the kit.py that is running.
+
+    A skill falls back to opascope-<name> when its short name was taken, so NEXT
+    must name the folder that actually holds it.
+    """
+    skills = Path(os.path.abspath(sys.argv[0])).parent.parent
+    for candidate in (name, 'opascope-' + name):
+        try:
+            if ROOT in (skills / candidate / 'SKILL.md').resolve(strict=True).parents:
+                return candidate
+        except (OSError, RuntimeError):
+            continue
+    return name
+
+
 def next_step(task, saved):
     kinds = {kind for kind, _ in saved if kind != 'optimization'}
     notable = [kind for kind, _ in saved if kind != 'optimization']
@@ -137,11 +153,11 @@ def next_step(task, saved):
         return 'follow the latest handoff'
     if (task / 'seal.json').exists():
         return 'continue the sealed loop: kit.py loop run'
-    for kind, step in (('plan', 'do the work, or opascope-loop-builder to run it unattended'),
-                       ('objective', 'opascope-planning'), ('brief', 'opascope-define-done')):
+    for kind, step in (('plan', f'do the work, or {installed_name("loop-builder")} to run it unattended'),
+                       ('objective', installed_name('planning')), ('brief', installed_name('define-done'))):
         if kind in kinds:
             return step
-    return 'opascope-interrogate'
+    return installed_name('interrogate')
 
 
 def start(path, task_id=None):
@@ -161,7 +177,7 @@ def start(path, task_id=None):
         else:
             print(f'PACKAGE: {local} (up to date)')
     if not root.exists():
-        print('PROJECT: new\nNEXT: opascope-interrogate')
+        print(f'PROJECT: new\nNEXT: {installed_name("interrogate")}')
         return
     tasks = sorted((p.parent for p in root.glob('*/task.json') if not p.parent.is_symlink()), key=lambda p: p.name)
     print(f'PROJECT: known, {len(tasks)} task{"" if len(tasks) == 1 else "s"}')
@@ -175,7 +191,7 @@ def start(path, task_id=None):
         print(f'NEXT: {next_step(task, saved)}')
         return
     if not tasks:
-        print('NEXT: opascope-interrogate')
+        print(f'NEXT: {installed_name("interrogate")}')
     for task in tasks:
         saved = artifacts(task)
         kinds = list(dict.fromkeys(kind for kind, _ in saved))

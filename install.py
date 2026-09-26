@@ -15,6 +15,9 @@ RECEIPT = '.opascope-skills-install.json'
 LOCK = '.opascope-skills-install.lock'
 INDEX = '.opascope-skills-installs.json'
 LOCATIONS = {'claude': Path('.claude/skills'), 'codex': Path('.agents/skills')}
+# Every home folder a runtime also reads skills from. A project install cannot use
+# a short name one of these already gives to another skill: the runtime would load that one.
+HOME_LOCATIONS = {'claude': [Path('.claude/skills')], 'codex': [Path('.agents/skills'), Path('.codex/skills')]}
 
 
 def exists(path):
@@ -181,20 +184,66 @@ def installed_bases(root=None):
     return found, stale
 
 
+def skill_dirs(root):
+    """A skill is a top-level folder that holds a SKILL.md."""
+    return sorted(p for p in Path(root).iterdir()
+                  if p.is_dir() and not p.name.startswith('.') and (p / 'SKILL.md').is_file())
+
+
 def matching_link(path, target):
     return path.is_symlink() and os.readlink(path) == target
 
 
-def desired_links(base, runtimes):
+def long_name(name):
+    return name if name == 'opascope' else 'opascope-' + name
+
+
+def shadowed(name, runtimes, base):
+    """True when a home skill folder the runtime also reads gives this name to another skill."""
+    try:
+        home = Path.home().resolve()
+    except (OSError, RuntimeError):
+        return False
+    if home == base:
+        return False
+    for runtime in runtimes:
+        for location in HOME_LOCATIONS[runtime]:
+            path = home / location / name
+            if not exists(path):
+                continue
+            try:
+                if ROOT in (path / 'SKILL.md').resolve(strict=True).parents:
+                    continue  # This package's own home install.
+            except (OSError, RuntimeError):
+                pass
+            return True
+    return False
+
+
+def install_names(base, runtimes, owned_directories):
+    """The name each skill installs under: its short name, or its long name when
+    something this package does not own already holds the short one, here or in
+    a home skill folder the runtime also reads."""
+    names = {}
+    for skill in skill_dirs(ROOT):
+        short = skill.name
+        taken = any(exists(base / LOCATIONS[r] / short) and
+                    str(LOCATIONS[r] / short) not in owned_directories for r in runtimes)
+        if short != 'opascope' and not taken:
+            taken = shadowed(short, runtimes, base)
+        names[short] = long_name(short) if taken else short
+    return names
+
+
+def desired_links(base, runtimes, names=None):
     links = {}
     for runtime in runtimes:
-        for skill in sorted(ROOT.glob('opascope*')):
-            if not (skill / 'SKILL.md').is_file():
-                continue
+        for skill in skill_dirs(ROOT):
+            name = (names or {}).get(skill.name, skill.name)
             for source in sorted(skill.iterdir()):
                 if source.name.startswith('.') or source.name == '__pycache__':
                     continue
-                destination = LOCATIONS[runtime] / skill.name / source.name
+                destination = LOCATIONS[runtime] / name / source.name
                 links[str(destination)] = str(source)
     if not links:
         raise ValueError('No skills found in this checkout')
@@ -212,7 +261,8 @@ def install(base, runtimes):
             raise ValueError('This base belongs to a different checkout. Uninstall that checkout first.')
         previous = prior or {'links': {}, 'directories': [], 'runtimes': []}
         runtimes = sorted(set(runtimes) | set(previous['runtimes']))
-        desired = desired_links(base, runtimes)
+        names = install_names(base, runtimes, previous['directories'])
+        desired = desired_links(base, runtimes, names)
         conflicts = []
         for relative, target in desired.items():
             dest = base / relative
@@ -251,6 +301,7 @@ def install(base, runtimes):
             receipt = {
                 'package': 'opascope-skills', 'schema': 1, 'source': str(ROOT),
                 'runtimes': runtimes,
+                'installed_as': names,
                 'directories': sorted(set(previous['directories'] + created_dirs)),
                 'links': {**previous['links'], **desired},
             }
@@ -294,8 +345,24 @@ def install(base, runtimes):
             elif exists(path):
                 print(f'Preserved changed retired entry: {path}')
                 retained[relative] = target
-        if set(receipt['links']) != set(desired) | set(retained):
+        # Owned skill directories that retired links left empty go too, so an
+        # upgrade from the long names leaves no empty folder behind.
+        needed = {str(Path(r).parent) for r in {**desired, **retained}}
+        removed = []
+        for relative in sorted(receipt['directories'], key=lambda s: len(Path(s).parts), reverse=True):
+            path = base / relative
+            if len(Path(relative).parts) != 3 or any(n == relative or n.startswith(relative + '/') for n in needed):
+                continue
+            if path.is_symlink() or not path.is_dir():
+                continue
+            try:
+                path.rmdir()
+                removed.append(relative)
+            except OSError:
+                pass
+        if removed or set(receipt['links']) != set(desired) | set(retained):
             receipt['links'] = {**desired, **retained}
+            receipt['directories'] = [d for d in receipt['directories'] if d not in removed]
             temporary = base / (RECEIPT + '.' + uuid.uuid4().hex)
             with temporary.open('x') as stream:
                 json.dump(receipt, stream, indent=2)
@@ -303,6 +370,9 @@ def install(base, runtimes):
             temporary.replace(base / RECEIPT)
         # Still under the base lock, so a racing uninstall cannot be undone by this entry.
         record(add=[str(base)])
+    for short, name in sorted(names.items()):
+        if name != short:
+            print(f'{short}: that name is already taken here, so it installs as {name}.')
     print(f'Installed {len(desired)} links for {", ".join(runtimes)} in {base}')
     print('Open a new session. Claude Code: /opascope | Codex: $opascope')
     print('Try: define done for sorting a folder of notes without losing any.')

@@ -42,7 +42,9 @@ sharing it, as they would any other working notes.
 
 ## One source, two discovery locations
 
-Canonical skills live in the `opascope*` folders at the repo root. Each installation creates a real
+Canonical skills live in the skill folders at the repo root. A skill is any top-level folder
+that holds a `SKILL.md`; `install.py`'s `skill_dirs()` is the one rule, and the gates use
+the same one. Each installation creates a real
 directory with links to its canonical skill's files, including shared `kit.py` and
 `shared.md` links. This keeps discovery flat without copying the skill text. Claude Code
 uses `.claude/skills`; Codex uses `.agents/skills`, either below the user's home or
@@ -51,7 +53,14 @@ Neither is injected into a consumer's project.
 
 The receipt in the installation base records every created link and directory.
 Existing destinations are collisions unless the receipt owns them and their link
-targets still match. Preflight checks the whole installation before changing it.
+targets still match. Each skill installs under its short name when that folder is
+free or owned. When something the receipt does not own holds the short name, that one
+skill installs as `opascope-<name>` instead. The same holds for a project install when a
+home skill folder the runtime also reads gives that name to another skill, and the installer says so; nothing
+unowned is touched. If the long name is taken too, the install stops before changing
+anything. The receipt's `installed_as` records the name each skill got, and `kit.py
+start` names that folder in its NEXT line. An upgrade retires links under names no
+longer used and removes owned skill folders they leave empty. Preflight checks the whole installation before changing it.
 Uninstall removes only matching recorded links and empty created directories. User
 additions and changed links survive and are reported. Project artifacts and the
 source checkout are user data and survive uninstall. Run uninstall before moving
@@ -107,7 +116,7 @@ record types and intentional undercounting are documented in `docs/usage.md`.
 Two gates hold as skills are added. Neither has a fixed skill list, so adding a
 skill never means editing a test.
 
-`opascope*/promise.json` states one skill's promise and the checks that would
+Each `<skill>/promise.json` states one skill's promise and the checks that would
 catch it breaking that promise. A skill is instructions, so the only honest proof
 is running it and reading the result; the checks turn that reading into pass or
 fail. Each contract also carries the fixture request that produces the result.

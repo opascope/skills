@@ -39,6 +39,13 @@ class TemporaryTest(unittest.TestCase):
         listing = patch.object(install, 'index_path', lambda root=None: self.index)
         listing.start()
         self.addCleanup(listing.stop)
+        # An empty home, so skills on the machine running the tests change nothing.
+        home = tempfile.TemporaryDirectory(prefix='skill-home-')
+        self.addCleanup(home.cleanup)
+        self.home = Path(home.name)
+        environment = patch.dict('os.environ', {'HOME': str(self.home)})
+        environment.start()
+        self.addCleanup(environment.stop)
 
 
 class InstallerTests(TemporaryTest):
@@ -60,12 +67,148 @@ class InstallerTests(TemporaryTest):
         self.assertEqual(snapshot(self.base), before)
 
     def test_preexisting_empty_skill_directory_is_collision(self):
+        # A stray long-name folder no longer blocks anything: planning installs
+        # under its short name and the stray folder is left as it was.
         target = self.base / '.agents/skills/opascope-planning'
         target.mkdir(parents=True)
+        install.install(self.base, ['claude', 'codex'])
+        self.assertTrue((self.base / '.agents/skills/planning/SKILL.md').is_file())
+        self.assertTrue(target.is_dir())
+        self.assertEqual(list(target.iterdir()), [])
+
+    def names(self, location='.claude/skills'):
+        return sorted(p.name for p in (self.base / location).iterdir() if (p / 'SKILL.md').exists())
+
+    def dangling(self):
+        return [p for p in self.base.rglob('*') if p.is_symlink() and not p.exists()]
+
+    def old_install(self):
+        """A v0.5.x install: links under opascope-<name>, pointing where the old folders were."""
+        links, directories = {}, {'.claude', '.claude/skills', '.agents', '.agents/skills'}
+        for location in install.LOCATIONS.values():
+            for skill in install.skill_dirs(ROOT):
+                name = install.long_name(skill.name)
+                directories.add(str(location / name))
+                (self.base / location / name).mkdir(parents=True, exist_ok=True)
+                for source in sorted(skill.iterdir()):
+                    if source.name.startswith('.') or source.name == '__pycache__':
+                        continue
+                    relative = str(location / name / source.name)
+                    links[relative] = str(ROOT / name / source.name)
+                    (self.base / relative).symlink_to(links[relative])
+        (self.base / install.RECEIPT).write_text(json.dumps({
+            'package': 'opascope-skills', 'schema': 1, 'source': str(ROOT),
+            'runtimes': ['claude', 'codex'], 'directories': sorted(directories), 'links': links}))
+
+    def taken(self):
+        other = self.base / '.claude/skills/interrogate'
+        other.mkdir(parents=True)
+        (other / 'SKILL.md').write_text('other skill')
+        return other
+
+    def test_fresh_install_uses_short_names(self):
+        install.install(self.base, ['claude', 'codex'])
+        short = sorted(p.name for p in install.skill_dirs(ROOT))
+        for location in install.LOCATIONS.values():
+            self.assertEqual(self.names(location), short)
+        receipt = install.read_receipt(self.base)
+        self.assertEqual(receipt['installed_as'], {n: n for n in short})
+
+    def test_taken_short_name_installs_long_name(self):
+        other = self.taken()
+        before = snapshot(other)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            install.install(self.base, ['claude', 'codex'])
+        notes = [l for l in out.getvalue().splitlines() if 'already taken' in l]
+        self.assertEqual(notes, ['interrogate: that name is already taken here, so it installs as opascope-interrogate.'])
+        self.assertEqual(snapshot(other), before)
+        self.assertEqual((other / 'SKILL.md').read_text(), 'other skill')
+        for location in install.LOCATIONS.values():
+            names = self.names(location)
+            self.assertIn('opascope-interrogate', names)
+            self.assertIn('planning', names)
+        self.assertEqual(install.read_receipt(self.base)['installed_as']['interrogate'], 'opascope-interrogate')
+
+    def test_long_name_also_taken_aborts(self):
+        self.taken()
+        (self.base / '.claude/skills/opascope-interrogate').mkdir()
         before = snapshot(self.base)
         with self.assertRaisesRegex(ValueError, 'Collisions'):
             install.install(self.base, ['claude', 'codex'])
-        self.assertEqual(before, snapshot(self.base))
+        self.assertEqual(snapshot(self.base), before)
+
+    def test_upgrade_from_long_names_retires_old_links(self):
+        self.old_install()
+        install.install(self.base, ['claude', 'codex'])
+        short = sorted(p.name for p in install.skill_dirs(ROOT))
+        for location in install.LOCATIONS.values():
+            self.assertEqual(sorted(p.name for p in (self.base / location).iterdir()), short)
+        self.assertEqual(self.dangling(), [])
+
+    def test_upgrade_with_taken_short_name_keeps_long_links(self):
+        self.old_install()
+        self.taken()
+        install.install(self.base, ['claude', 'codex'])
+        self.assertTrue((self.base / '.claude/skills/opascope-interrogate/SKILL.md').is_file())
+        self.assertEqual((self.base / '.claude/skills/interrogate/SKILL.md').read_text(), 'other skill')
+        self.assertTrue((self.base / '.claude/skills/planning/SKILL.md').is_file())
+        self.assertEqual(self.dangling(), [])
+
+    def test_uninstall_after_fallback_removes_only_owned(self):
+        other = self.taken()
+        before = snapshot(self.base)
+        install.install(self.base, ['claude', 'codex'])
+        install.uninstall(self.base)
+        self.assertEqual(snapshot(self.base), before)
+        self.assertEqual((other / 'SKILL.md').read_text(), 'other skill')
+
+    def test_start_names_installed_skill(self):
+        project = self.base / 'project'
+        project.mkdir()
+        kit_path = self.base / '.claude/skills/planning/kit.py'
+
+        def next_line():
+            done = subprocess.run([sys.executable, str(kit_path), 'start', '--project', str(project)],
+                                  capture_output=True, text=True, check=True)
+            return done.stdout.splitlines()[-1]
+        install.install(self.base, ['claude'])
+        self.assertEqual(next_line(), 'NEXT: interrogate')
+        install.uninstall(self.base)
+        self.taken()
+        install.install(self.base, ['claude'])
+        self.assertEqual(next_line(), 'NEXT: opascope-interrogate')
+
+    def test_home_skill_of_same_name_makes_project_install_use_long_name(self):
+        project = self.base / 'project'
+        project.mkdir()
+        other = self.home / '.agents/skills/session-handoff'
+        other.mkdir(parents=True)
+        (other / 'SKILL.md').write_text('other skill')
+        install.install(project, ['codex'])
+        self.assertTrue((project / '.agents/skills/opascope-session-handoff/SKILL.md').is_file())
+        self.assertTrue((project / '.agents/skills/planning/SKILL.md').is_file())
+        self.assertEqual((other / 'SKILL.md').read_text(), 'other skill')
+        # Claude does not read that folder, so a Claude install keeps the short name.
+        second = self.base / 'second'
+        second.mkdir()
+        install.install(second, ['claude'])
+        self.assertTrue((second / '.claude/skills/session-handoff/SKILL.md').is_file())
+
+    def test_own_home_install_does_not_push_project_to_long_names(self):
+        install.install(self.home, ['claude', 'codex'])
+        project = self.base / 'project'
+        project.mkdir()
+        install.install(project, ['claude', 'codex'])
+        short = sorted(p.name for p in install.skill_dirs(ROOT))
+        self.assertEqual(sorted(p.name for p in (project / '.claude/skills').iterdir()), short)
+
+    def test_upgrade_leaves_no_empty_long_directory(self):
+        self.old_install()
+        install.install(self.base, ['claude', 'codex'])
+        for location in install.LOCATIONS.values():
+            self.assertEqual([p.name for p in (self.base / location).iterdir() if p.name.startswith('opascope-')], [])
+        receipt = install.read_receipt(self.base)
+        self.assertFalse([d for d in receipt['directories'] if 'opascope-' in d])
 
     def test_dangling_link_and_parent_link_are_collisions(self):
         target = self.base / '.claude'
@@ -410,15 +553,15 @@ class ArtifactTests(TemporaryTest):
 class MeasurementTests(TemporaryTest):
     def test_malformed_record_shapes_do_not_abort_scan(self):
         rows = [{'type': 'user', 'message': None}, {'type': 'session_meta', 'payload': []},
-                {'type': 'user', 'message': {'content': '$opascope-planning'}}]
+                {'type': 'user', 'message': {'content': '$planning'}}]
         (self.base / 'shapes.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
         result = measurement.measure([self.base])
         self.assertEqual(result['malformed_lines'], 2)
-        self.assertEqual(result['ranking'], [{'skill': 'opascope-planning', 'sessions': 1}])
+        self.assertEqual(result['ranking'], [{'skill': 'planning', 'sessions': 1}])
 
     def test_catalog_filters_builtin_markup_and_unknown_prose(self):
-        record = {'type': 'user', 'message': {'content': '<command-name>/model</command-name> /copy /unknown $opascope-planning'}}
-        self.assertEqual(measurement.invocations(record, {'opascope-planning'}), {'opascope-planning'})
+        record = {'type': 'user', 'message': {'content': '<command-name>/model</command-name> /copy /unknown $planning'}}
+        self.assertEqual(measurement.invocations(record, {'planning'}), {'planning'})
         record = {'type': 'user', 'message': {'content': '/old-skill'}}
         self.assertEqual(measurement.invocations(record, {'old-skill'}), {'old-skill'})
 
@@ -429,18 +572,18 @@ class MeasurementTests(TemporaryTest):
     def test_session_dedup_and_invocation_only(self):
         rows = [
             {'type': 'session_meta', 'payload': {'id': 'test-session'}},
-            {'type': 'response_item', 'payload': {'role': 'user', 'content': [{'type': 'input_text', 'text': '$opascope-planning do this'}]}},
-            {'type': 'event_msg', 'payload': {'type': 'user_message', 'message': '$opascope-planning do this'}},
-            {'type': 'response_item', 'payload': {'role': 'assistant', 'content': [{'type': 'output_text', 'text': '$opascope-optimize mentioned'}]}},
-            {'type': 'user', 'message': {'content': '`$opascope-optimize` and ```\n/opascope-interrogate\n```'}},
-            {'type': 'user', 'message': {'content': '<INSTRUCTIONS> /opascope-optimize </INSTRUCTIONS>'}},
+            {'type': 'response_item', 'payload': {'role': 'user', 'content': [{'type': 'input_text', 'text': '$planning do this'}]}},
+            {'type': 'event_msg', 'payload': {'type': 'user_message', 'message': '$planning do this'}},
+            {'type': 'response_item', 'payload': {'role': 'assistant', 'content': [{'type': 'output_text', 'text': '$optimize mentioned'}]}},
+            {'type': 'user', 'message': {'content': '`$optimize` and ```\n/interrogate\n```'}},
+            {'type': 'user', 'message': {'content': '<INSTRUCTIONS> /optimize </INSTRUCTIONS>'}},
         ]
         text = '\n'.join(json.dumps(x) for x in rows)
         (self.base / 'one.jsonl').write_text(text + '\ninvalid\n')
         (self.base / 'copy.jsonl').write_text(text)
         before = snapshot(self.base)
         result = measurement.measure([self.base])
-        self.assertEqual(result['ranking'], [{'skill': 'opascope-planning', 'sessions': 1}])
+        self.assertEqual(result['ranking'], [{'skill': 'planning', 'sessions': 1}])
         self.assertEqual(result['sessions'], 1)
         self.assertEqual(result['malformed_lines'], 1)
         self.assertIn('Undercounts', result['limitation'])
@@ -449,7 +592,7 @@ class MeasurementTests(TemporaryTest):
     def test_claude_skill_call_and_command(self):
         rows = [
             {'type': 'user', 'sessionId': 'toy', 'message': {'content': '<command-name>/opascope</command-name>'}},
-            {'type': 'assistant', 'sessionId': 'toy', 'message': {'content': [{'type': 'tool_use', 'name': 'Skill', 'input': {'skill': 'opascope-planning'}}]}},
+            {'type': 'assistant', 'sessionId': 'toy', 'message': {'content': [{'type': 'tool_use', 'name': 'Skill', 'input': {'skill': 'planning'}}]}},
         ]
         (self.base / 'session.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
         self.assertEqual(len(measurement.measure([self.base])['ranking']), 2)
@@ -566,13 +709,13 @@ class StartTests(TemporaryTest):
 
     def test_new_project_creates_nothing(self):
         lines = self.start()
-        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: opascope-interrogate'])
+        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: interrogate'])
         self.assertEqual(list(self.base.iterdir()), [])
 
     def test_next_step_follows_what_is_saved(self):
-        cases = [((), 'opascope-interrogate'), (('brief',), 'opascope-define-done'),
-                 (('brief', 'objective'), 'opascope-planning'),
-                 (('brief', 'objective', 'plan'), 'do the work, or opascope-loop-builder to run it unattended'),
+        cases = [((), 'interrogate'), (('brief',), 'define-done'),
+                 (('brief', 'objective'), 'planning'),
+                 (('brief', 'objective', 'plan'), 'do the work, or loop-builder to run it unattended'),
                  (('plan', 'handoff'), 'follow the latest handoff')]
         for kinds, expected in cases:
             with self.subTest(kinds=kinds):
@@ -586,7 +729,7 @@ class StartTests(TemporaryTest):
 
     def test_handoff_only_wins_when_newest(self):
         task = self.task('handoff', 'objective')
-        self.assertEqual(self.start(task.name)[-1], 'NEXT: opascope-planning')
+        self.assertEqual(self.start(task.name)[-1], 'NEXT: planning')
 
     def test_two_tasks_list_without_choosing(self):
         first, second = self.task('brief'), self.task()
@@ -606,7 +749,7 @@ class StartTests(TemporaryTest):
 
     def test_optimization_alone_does_not_change_next(self):
         task = self.task('optimization')
-        self.assertEqual(self.start(task.name)[-1], 'NEXT: opascope-interrogate')
+        self.assertEqual(self.start(task.name)[-1], 'NEXT: interrogate')
         self.assertIn('| saved: optimization |', self.start()[-1])
 
     def test_newer_local_tag_is_reported(self):
@@ -620,11 +763,11 @@ class StartTests(TemporaryTest):
         with patch.object(kit, 'git', side_effect=subprocess.SubprocessError('no git')):
             lines = self.start()
         self.assertEqual(lines[0], 'PACKAGE: %s (update check unavailable)' % (ROOT / 'VERSION').read_text().strip())
-        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: opascope-interrogate'])
+        self.assertEqual(lines[1:], ['PROJECT: new', 'NEXT: interrogate'])
 
     def test_owned_directory_without_tasks(self):
         kit.artifact_root(self.base, create=True)
-        self.assertEqual(self.start()[1:], ['PROJECT: known, 0 tasks', 'NEXT: opascope-interrogate'])
+        self.assertEqual(self.start()[1:], ['PROJECT: known, 0 tasks', 'NEXT: interrogate'])
 
     def test_task_detail_names_latest_handoff(self):
         task = self.task('brief', 'handoff')
@@ -637,7 +780,7 @@ class StartTests(TemporaryTest):
 
 class PackageTests(unittest.TestCase):
     def test_every_skill_has_metadata_and_resolving_markdown_links(self):
-        skills = list(ROOT.glob('opascope*/SKILL.md'))
+        skills = [p / 'SKILL.md' for p in install.skill_dirs(ROOT)]
         self.assertEqual(len(skills), 7)
         import re
         for path in skills:
