@@ -58,7 +58,7 @@ If you are unsure where to start, type `/opascope` or `$opascope`.
 
 ## The skills
 
-Skill names start with `opascope-`. To choose, use `opascope`. The same files serve both agents. You do not need a second copy to keep in sync.
+Each skill is named for its job. If you are not sure which to use, `opascope` picks one for you. A skill installs as `opascope-<name>` only when its short name is already taken. The same files serve both agents. You do not need a second copy to keep in sync.
 
 | Skill | What it promises |
 |---|---|

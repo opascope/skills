@@ -2,7 +2,7 @@
 
 Keep this package domain-independent and dependency-free: markdown and Python's
 standard library only. Read ARCHITECTURE.md before changing artifact semantics.
-Canonical skill instructions live in the opascope folders at the repo root, never in generated copies.
+Canonical skill instructions live in the skill folders at the repo root, never in generated copies.
 
 Use feature branches and pull requests to main. Run
 `python3 -m unittest discover -s tests -v` before merging. Runtime smoke tests are
