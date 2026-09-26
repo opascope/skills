@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+- Skills are named for what they do: `interrogate`, `define-done`, `planning`,
+  `session-handoff`, `optimize`, `loop-builder`. If another skill already has a
+  name, that one installs as `opascope-<name>` instead. `kit.py update` moves
+  your links for you.
+- New `openrouter` skill. One small script for any OpenRouter model. When you do
+  not name a model, Jev picks one per request, and every answer says which model
+  ran and what it cost.
+- New `jevify` skill. It turns judgment calls in a marketing workflow into Jev
+  jobs over a spreadsheet, with a sample, a blind check by a person, and a cost
+  shown before every run.
+- Both new skills need an OpenRouter key. Without one they stop and tell you what
+  to add.
+- Live checks passed for every skill on Claude Code and Codex.
+
 ## 0.5.1
 
 - `install.py status` now shows every place the skills are installed. Before,

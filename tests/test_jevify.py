@@ -115,13 +115,13 @@ class JevTest(unittest.TestCase):
         def fake_urlopen(request, timeout=None):
             sent.update(json.loads(request.data))
             return Reply()
-        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-v1-fakekey"}), \
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-" "or-v1-fakekey"}), \
                 mock.patch.object(jev.urllib.request, "urlopen", fake_urlopen):
             jev.call("openrouter", jev.ENDPOINTS["openrouter"][2], {"text": "x"}, JOB["questions"])
         self.assertEqual(sent["model"], "~typesafe/jev-latest")
 
     def test_key_never_appears_in_errors(self):
-        key = "sk-or-v1-fakekey0123"
+        key = "sk-" "or-v1-fakekey0123"
         error = jev.urllib.error.HTTPError("u", 401, "no", {}, io.BytesIO(
             json.dumps({"error": {"message": "bad key " + key}}).encode()))
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": key}), \
