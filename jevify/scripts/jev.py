@@ -19,7 +19,10 @@ Commands:
                                        (label a choice with the option name, a score with the
                                        level number from 0, a noul with yes or no)
 
-Keys: TYPESAFE_API_KEY (direct TypeSafe API) or OPENROUTER_API_KEY (OpenRouter).
+A JOB may be a path, or the name of a ready job in this skill's assets/jobs/ folder.
+
+Keys: OPENROUTER_API_KEY (OpenRouter, the default route) or TYPESAFE_API_KEY (the direct
+TypeSafe API, used when only that key is set).
 """
 import argparse
 import concurrent.futures as cf
@@ -32,12 +35,16 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 ENDPOINTS = {
-    # provider: (url, key env var, default model)
+    # provider: (url, key env var, default model). Order is the default precedence:
+    # OpenRouter first; TypeSafe direct only when its key is the one that is set.
+    "openrouter": ("https://openrouter.ai/api/alpha/decisions", "OPENROUTER_API_KEY", "~typesafe/jev-latest"),
     "typesafe": ("https://api.typesafe.ai/v1/systemone", "TYPESAFE_API_KEY", "jev-latest"),
-    "openrouter": ("https://openrouter.ai/api/alpha/decisions", "OPENROUTER_API_KEY", "typesafe/jev-1.13"),
 }
+PROVIDER_ORDER = ("openrouter", "typesafe")
+JOBS_DIR = Path(__file__).resolve().parent.parent / "assets" / "jobs"
 # Vendor limits (docs.typesafe.ai/api): choice up to 255 options, score 2 to 10 levels.
 MAX_CHOICE_OPTIONS = 255
 SCORE_LEVELS = (2, 10)
@@ -52,13 +59,43 @@ ABSTAIN_WORDS = ("none", "unknown", "unclear", "other", "neither", "abstain", "n
 MATH_WORDS = re.compile(r"\b(how many|count|percent|percentage|sum of|average|days between|how long ago|older than|newer than)\b", re.I)
 
 
+def hide_keys(text):
+    for _, env, _ in ENDPOINTS.values():
+        key = os.environ.get(env, "").strip()
+        if key:
+            text = text.replace(key, "[key hidden]")
+    return text
+
+
 def fail(msg):
-    sys.exit(f"error: {msg}")
+    sys.exit(f"error: {hide_keys(str(msg))}")
+
+
+def cost_of(usage):
+    """The cost the response states. On the account's own provider key OpenRouter reports
+    cost 0 and the real cost in cost_details.upstream_inference_cost."""
+    usage = usage or {}
+    if usage.get("is_byok"):
+        value = (usage.get("cost_details") or {}).get("upstream_inference_cost")
+    else:
+        value = usage.get("cost")
+    return value if isinstance(value, (int, float)) else 0
 
 
 # ---------- job loading and validation ----------
 
+def job_path(path):
+    """A path as given, or a ready job's name looked up in assets/jobs/."""
+    if os.path.exists(path):
+        return path
+    for candidate in (JOBS_DIR / path, JOBS_DIR / (path + ".json")):
+        if candidate.is_file():
+            return str(candidate)
+    return path
+
+
 def load_job(path):
+    path = job_path(path)
     try:
         with open(path) as f:
             job = json.load(f)
@@ -145,10 +182,10 @@ def pick_provider(forced):
         if not os.environ.get(env):
             fail(f"--provider {forced} needs {env} set")
         return forced
-    for name, (_, env, _) in ENDPOINTS.items():
-        if os.environ.get(env):
+    for name in PROVIDER_ORDER:
+        if os.environ.get(ENDPOINTS[name][1]):
             return name
-    fail("set TYPESAFE_API_KEY (console.typesafe.ai/keys) or OPENROUTER_API_KEY (openrouter.ai/keys)")
+    fail("set OPENROUTER_API_KEY (openrouter.ai/keys), or TYPESAFE_API_KEY (console.typesafe.ai/keys) for the direct route")
 
 
 def call(provider, model, state, questions, retries=3, timeout=60):
@@ -169,7 +206,7 @@ def call(provider, model, state, questions, retries=3, timeout=60):
             if e.code in (429, 500, 502, 503, 504) and attempt < retries:
                 time.sleep(2 ** attempt + random.random())
                 continue
-            raise RuntimeError(f"HTTP {e.code}: {detail}") from None
+            raise RuntimeError(hide_keys(f"HTTP {e.code}: {detail}")) from None
         except (urllib.error.URLError, TimeoutError) as e:
             if attempt < retries:
                 time.sleep(2 ** attempt + random.random())
@@ -242,7 +279,7 @@ def cmd_run(args):
 
     def one(row):
         body = call(provider, model, state_for(job, row), questions)
-        return check_answers(questions, body), (body.get("usage") or {}).get("cost") or 0
+        return check_answers(questions, body), cost_of(body.get("usage"))
 
     out_path = args.out or re.sub(r"\.(csv|jsonl)$", "", args.items) + f".{job.get('name', 'jev')}.csv"
     started, spent, failed = time.time(), 0.0, 0
@@ -256,7 +293,7 @@ def cmd_run(args):
                 spent += cost
             except Exception as e:  # keep going; report the row
                 failed += 1
-                results[i] = {"_error": str(e)}
+                results[i] = {"_error": hide_keys(str(e))}
     cols = list(header)
     for qid in questions:
         cols += [qid, f"{qid}_confidence", f"{qid}_route"]
