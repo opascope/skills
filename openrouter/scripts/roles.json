@@ -7,12 +7,12 @@
     },
     "fast": {
       "model": "~google/gemini-flash-latest",
-      "description": "Fast and cheap. Extraction, classification, short answers, JSON, images.",
+      "description": "Quick everyday calls. Extraction, classification, short answers, JSON, images.",
       "effort": "low"
     },
     "frontier": {
       "model": "~anthropic/claude-sonnet-latest",
-      "description": "Highest quality. Hard reasoning and careful judgment."
+      "description": "Hard reasoning and careful judgment."
     },
     "writer": {
       "model": "~moonshotai/kimi-latest",
@@ -40,7 +40,7 @@
       "model": "~typesafe/jev-latest",
       "description": "Closed-choice decisions on the decisions endpoint.",
       "checked_by": "decisions-endpoint",
-      "why": "The decisions endpoint serves Jev only and is not in the public catalogs. This alias follows new Jev versions."
+      "why": "This alias is used on the decisions endpoint and is not listed in the public catalogs. It follows new Jev versions."
     }
   },
   "router": {

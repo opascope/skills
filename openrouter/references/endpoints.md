@@ -49,6 +49,8 @@ Credit limit, what is left and what was used on the current key.
 
 ## Errors
 
+OpenRouter lists its error codes at https://openrouter.ai/docs/api-reference/errors.
+
 - 401: the key was refused.
 - 402: no credit left.
 - 429: rate limited; wait and retry.

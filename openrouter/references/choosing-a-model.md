@@ -9,8 +9,8 @@ role points at today.
 | Role | The need it names | Follows latest or pinned |
 |---|---|---|
 | `auto` | no model named: Jev picks per request | the router |
-| `fast` | cheap, quick: extraction, classifying, short answers | follows latest |
-| `frontier` | the best judgment: hard calls, second opinions | follows latest |
+| `fast` | everyday calls: extraction, classifying, short answers | follows latest |
+| `frontier` | hard calls and second opinions | follows latest |
 | `writer` | long prose | follows latest |
 | `sonar` | web research with citations | pinned |
 | `sonar-pro` | deeper web research with citations | pinned |
