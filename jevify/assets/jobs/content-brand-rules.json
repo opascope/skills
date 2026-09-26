@@ -1,0 +1,22 @@
+{
+  "name": "brand-rules",
+  "fields": ["draft"],
+  "questions": {
+    "rule_no_hype": {
+      "type": "choice",
+      "instructions": "Rule: no hype words such as revolutionary, game-changing or unlock (REPLACE with your rule). Does `draft` follow it?",
+      "criteria": {"pass": "Follows the rule everywhere.", "fail": "Breaks the rule at least once.", "unclear": "Cannot tell."}
+    },
+    "rule_specific_proof": {
+      "type": "choice",
+      "instructions": "Rule: every claim of a result is backed by a specific number, name or example (REPLACE with your rule). Does `draft` follow it?",
+      "criteria": {"pass": "Every result claim has specific backing, or there are no result claims.", "fail": "At least one result claim has no specific backing.", "unclear": "Cannot tell."}
+    },
+    "rule_reader_first": {
+      "type": "choice",
+      "instructions": "Rule: the draft talks about the reader's problem before talking about the company (REPLACE with your rule). Does `draft` follow it?",
+      "criteria": {"pass": "The reader's problem comes first.", "fail": "It opens by talking about the company.", "unclear": "Cannot tell."}
+    }
+  },
+  "cutoffs": {"rule_no_hype": 0.9, "rule_specific_proof": 0.9, "rule_reader_first": 0.9}
+}

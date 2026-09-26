@@ -1,0 +1,17 @@
+{
+  "name": "duplicate-idea",
+  "fields": ["idea", "existing_title", "existing_summary"],
+  "questions": {
+    "covered": {
+      "type": "choice",
+      "instructions": "A writer proposes `idea`. Does the published page (`existing_title`, `existing_summary`) already answer the same reader question? Compare the questions each answers, not the wording of the titles.",
+      "criteria": {
+        "same_question": "The page already answers the question the idea would answer; writing it would compete with the page.",
+        "overlaps": "The page covers part of it; the idea could be a section of that page or a clearly narrower angle.",
+        "different": "The two answer different reader questions, even if the titles sound alike.",
+        "unclear": "The summary is too thin to tell."
+      }
+    }
+  },
+  "cutoffs": {"covered": 0.9}
+}

@@ -1,0 +1,22 @@
+{
+  "name": "landing-objections",
+  "fields": ["landing_page_text"],
+  "questions": {
+    "answers_price": {
+      "type": "choice",
+      "instructions": "Does `landing_page_text` answer the buyer worry 'is this worth the price?' (REPLACE with your buyer's top objection) with something specific such as a price, a comparison, a guarantee or a result?",
+      "criteria": {"yes": "Answered with something specific.", "no": "Not addressed, or only with vague reassurance.", "unclear": "Not enough text to judge."}
+    },
+    "answers_trust": {
+      "type": "choice",
+      "instructions": "Does `landing_page_text` answer 'can I trust them?' (REPLACE with your second objection) with specific proof such as named customers, reviews, numbers or guarantees?",
+      "criteria": {"yes": "Answered with specific proof.", "no": "Not addressed, or only with vague reassurance.", "unclear": "Not enough text to judge."}
+    },
+    "answers_effort": {
+      "type": "choice",
+      "instructions": "Does `landing_page_text` answer 'how hard is this to start?' (REPLACE with your third objection) with specific steps, time or setup details?",
+      "criteria": {"yes": "Answered with specifics.", "no": "Not addressed, or only with vague reassurance.", "unclear": "Not enough text to judge."}
+    }
+  },
+  "cutoffs": {"answers_price": 0.9, "answers_trust": 0.9, "answers_effort": 0.9}
+}

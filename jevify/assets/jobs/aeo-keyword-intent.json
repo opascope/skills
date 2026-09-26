@@ -1,0 +1,36 @@
+{
+  "name": "keyword-intent",
+  "fields": [
+    "keyword"
+  ],
+  "questions": {
+    "intent": {
+      "type": "choice",
+      "instructions": "What is the person who typed `keyword` most likely trying to do? Judge only the words of the keyword.",
+      "criteria": {
+        "learn": "Wants to understand a topic or solve a problem, not yet looking at products. Example: how to fix low ROAS.",
+        "compare": "Weighing options, alternatives, reviews or best-of lists. Example: best smart ring 2026, oura vs whoop.",
+        "buy": "Ready to purchase or get a price, trial, quote or demo. Example: buy running shoes size 11, hubspot pricing.",
+        "go_somewhere": "Looking for one specific site, brand, company, login or location. A brand or company name on its own belongs here. Example: facebook ads manager login, nike.",
+        "unclear": "Too short, ambiguous or mixed to call. Use this instead of guessing."
+      }
+    },
+    "format": {
+      "type": "choice",
+      "instructions": "Which content format would best answer `keyword` for a searcher?",
+      "criteria": {
+        "guide": "Step-by-step or explanatory article.",
+        "listicle": "Ranked or grouped list of options.",
+        "comparison": "Two or more named options side by side.",
+        "glossary": "Short definition of a term.",
+        "news": "A dated news update or announcement; the keyword names an event, release or month.",
+        "product_page": "A product, pricing or category page, not an article.",
+        "none_fit": "No content format fits, for example a login or navigation query."
+      }
+    }
+  },
+  "cutoffs": {
+    "intent": 0.9,
+    "format": 0.9
+  }
+}
