@@ -69,6 +69,7 @@ Each skill is named for its job. If you are not sure which to use, `opascope` pi
 | `optimize` | Says what to delete, argues the other side first, and changes nothing. |
 | `loop-builder` | Sets up a long unattended run with a real finish line and a spending limit. |
 | `openrouter` | Asks another model and tells you which model answered and what it cost. |
+| `jevify` | Labels every row with Jev after a sample, a cost and a person's check. |
 | `opascope` | Names the skill that fits, and runs it only if you asked for the work. |
 
 ### How do I stop an agent from guessing at requirements?

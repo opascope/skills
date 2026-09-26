@@ -16,21 +16,21 @@ angles customers actually use.
 | **Comment triage** (spam, question, praise, needs a reply today) | **Jev** | then a writing model drafts replies only for rows Jev marked worth replying |
 | **Does this post discuss X?** (pricing, a competitor, a product line) | **Jev** per post | meaning; a keyword search misses "plans start at $49" |
 | Share of posts that discuss X | code | count Jev's yes answers; never ask Jev to count |
-| **Is this idea already covered?** | **Jev** | compare the reader's question, not the title (`jobs/aeo-duplicate-idea.json`) |
+| **Is this idea already covered?** | **Jev** | compare the reader's question, not the title (`assets/jobs/aeo-duplicate-idea.json`) |
 | Write, edit, reply | writing model, then a person | Jev cannot write |
 
 ## Ready jobs
 
-- `jobs/content-brand-rules.json`: pass, fail or unclear per brand rule. Replace the three
+- `assets/jobs/content-brand-rules.json`: pass, fail or unclear per brand rule. Replace the three
   sample rules with yours; one question per rule.
-- `jobs/content-claim-support.json`: supported, partly, contradicted or not addressed. Input
+- `assets/jobs/content-claim-support.json`: supported, partly, contradicted or not addressed. Input
   needs `claim` and `source_excerpt`.
-- `jobs/content-review-mining.json`: complaint topic and switching risk per review. Edit the
+- `assets/jobs/content-review-mining.json`: complaint topic and switching risk per review. Edit the
   topic list to your product.
-- `jobs/content-mentions.json`: does this text discuss the topic (yes, no, unclear). Input
+- `assets/jobs/content-mentions.json`: does this text discuss the topic (yes, no, unclear). Input
   needs a `text` column; put the topic in `shared_state`.
 
-## What went wrong for others
+## Common mistakes
 
 - **Treating a claim check as fact-checking.** It tells you where to look, not what is true.
   A person still clears anything published.

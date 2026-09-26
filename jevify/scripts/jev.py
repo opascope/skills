@@ -45,14 +45,15 @@ ENDPOINTS = {
 }
 PROVIDER_ORDER = ("openrouter", "typesafe")
 JOBS_DIR = Path(__file__).resolve().parent.parent / "assets" / "jobs"
-# Vendor limits (docs.typesafe.ai/api): choice up to 255 options, score 2 to 10 levels.
+# Vendor limits (https://docs.typesafe.ai/api.md): choice up to 255 options, score 2 to 10 levels.
 MAX_CHOICE_OPTIONS = 255
 SCORE_LEVELS = (2, 10)
-# Vendor list price per input token; output tokens are free. Used only for the pre-run estimate.
+# Vendor list price per input token; output tokens are free (https://docs.typesafe.ai/models.md).
+# Used only for the pre-run estimate.
 PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000
 CHARS_PER_TOKEN = 4  # rough English average, estimate only
-# Billed input ran ~2x the character estimate in a live check (20 rows: est $0.0003, billed
-# $0.00055), likely per-question overhead on the vendor side. Pad so --max-cost is conservative.
+# Billed input can run near twice the character estimate on short rows, likely per-question
+# overhead on the vendor side. Pad so --max-cost is conservative.
 ESTIMATE_PAD = 2.0
 DEFAULT_CUTOFF = 0.9  # conservative start; replace with the result of `calibrate`
 ABSTAIN_WORDS = ("none", "unknown", "unclear", "other", "neither", "abstain", "not_enough", "insufficient", "unsure")
@@ -412,7 +413,7 @@ def main():
     r.add_argument("--limit", type=int, help="only the first N rows (20 for the sample run)")
     r.add_argument("--shuffle", action="store_true", help="with --limit, take a random sample instead")
     r.add_argument("--out"); r.add_argument("--model"); r.add_argument("--provider", choices=list(ENDPOINTS))
-    r.add_argument("--concurrency", type=int, default=8, help="parallel requests (8 is what we have tested)")
+    r.add_argument("--concurrency", type=int, default=8, help="parallel requests")
     r.add_argument("--max-cost", type=float, default=1.0, help="refuse to start above this estimate, USD")
     rv = sub.add_parser("review"); rv.add_argument("results"); rv.add_argument("--question", required=True)
     rv.add_argument("--low", type=int, default=14); rv.add_argument("--high", type=int, default=6); rv.add_argument("--out")
