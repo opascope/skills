@@ -34,6 +34,9 @@ BROKEN = {
         'Brief\n- GUESSED: the output is probably index.md\n- SAID: sort the notes\n'
         'Which file name do you want?\n',
     'opascope': 'This is solved when the notes are organized.\n',
+    'openrouter':
+        'model: typesafe/jev-router | chosen by: jev-router | cost: $0.00002 | tokens: 9/4 '
+        '| id: gen-abc123\nkey used: sk-or-v1-0000fake\n',
 }
 
 
@@ -141,6 +144,15 @@ class PromiseContractTests(unittest.TestCase):
          '### 2. Write the index\nDo: write index.md with one link per note\n'
          'Verify: index.md lists each note exactly once\nStatus: pending\n'
          'Mode: sequential self-review, not independent\n'),
+        ('openrouter', 'does-not-credit-the-router-as-the-answerer',
+         'model: typesafe/jev-router | chosen by: jev-router | cost: $0.00002 | tokens: 9/4 '
+         '| id: gen-abc123\n'),
+        ('openrouter', 'never-shows-the-key',
+         'model: deepseek/deepseek-v4.1-flash | chosen by: jev-router | cost: $0.00002 '
+         '| tokens: 9/4 | id: gen-abc123\nAuthorization: Bearer sk-or-v1-0000fake\n'),
+        ('openrouter', 'ran-the-script',
+         'model: deepseek/deepseek-v4.1-flash | chosen by: jev-router | cost: $0.0000384 '
+         '| tokens: 9/4\n'),
     ]
 
     # A live run wrote this, correctly labelling the file name SAID and only the
@@ -283,6 +295,11 @@ class PromiseContractTests(unittest.TestCase):
         'opascope': (
             '', 'Use define-done. It writes the one sentence you asked for.\n'
             'Done.\n'),
+        'openrouter': (
+            'model: deepseek/deepseek-v4.1-flash | chosen by: jev-router | cost: $0.0000384 '
+            '| tokens: 22/9 | id: gen-1790393512-AbCdEf\n',
+            '9.9 is larger. deepseek/deepseek-v4.1-flash answered, for $0.0000384.\n'
+            'Done.\nSaved the receipt.\n'),
     }
 
     def test_every_contract_passes_its_own_compliant_output(self):

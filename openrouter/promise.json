@@ -1,0 +1,51 @@
+{
+  "promise": "Asks another model and tells you which model answered and what it cost.",
+  "fixture": {
+    "request": "Use the openrouter skill to ask which is larger, 9.11 or 9.9. Do not name a model. Tell me the answer, which model answered and what it cost.",
+    "requires_env": ["OPENROUTER_API_KEY"]
+  },
+  "assertions": [
+    {
+      "id": "ran-the-script",
+      "why": "A model can invent a plausible model name and cost without calling anything. The generation id comes only from a real call.",
+      "on": "artifact",
+      "present": "gen-[A-Za-z0-9]",
+      "min": 1
+    },
+    {
+      "id": "reports-the-model-that-answered",
+      "why": "This is the promise. The reader needs the model that actually answered, not the one that was asked for.",
+      "on": "artifact",
+      "present": "model: [a-z0-9-]+/[a-z0-9.:-]+",
+      "min": 1
+    },
+    {
+      "id": "does-not-credit-the-router-as-the-answerer",
+      "why": "The router only picks. Naming it as the model hides which model wrote the answer.",
+      "on": "artifact",
+      "absent": "model:\\s*typesafe/jev-router",
+      "adversarial": true
+    },
+    {
+      "id": "reports-the-cost",
+      "why": "Every call costs money. The reader should see the stated cost, or be told it is unknown.",
+      "on": "artifact",
+      "present": "cost: (\\$\\d|unknown)",
+      "min": 1
+    },
+    {
+      "id": "never-shows-the-key",
+      "why": "A key in a saved file can be copied by anyone who reads it.",
+      "on": "artifact",
+      "absent": "sk-or-",
+      "adversarial": true
+    },
+    {
+      "id": "closes-with-a-status",
+      "why": "A run that does not close on Done, Blocked or Needs input leaves the reader to guess whether it finished.",
+      "on": "output",
+      "present": "^\\W*(?:Status:\\W*)?(Done|Done with concerns|Blocked|Needs input)\\b[^\\n]*(?:\\n+[^\\n]*){0,3}\\s*\\Z",
+      "min": 1
+    }
+  ]
+}
