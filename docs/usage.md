@@ -2,7 +2,7 @@
 id: usage
 title: "Measuring which Claude Code and Codex skills you actually use"
 owner: maintainers
-covers: ["lib/measurement.py"]
+covers: ["kit.py", "lib/measurement.py"]
 ---
 # Measuring which Claude Code and Codex skills you actually use
 

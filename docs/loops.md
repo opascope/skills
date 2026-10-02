@@ -2,7 +2,7 @@
 id: loops
 title: "Running an unattended Claude Code or Codex loop with real proofs"
 owner: maintainers
-covers: ["lib/loops.py"]
+covers: ["kit.py", "lib/loops.py", "loop-builder/references/contract.md"]
 ---
 # Running an unattended Claude Code or Codex loop with real proofs
 
