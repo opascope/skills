@@ -376,6 +376,10 @@ class Maintain:
         # scratch never lands in a commit, whatever the repo's .gitignore says
         git(self.root, "add", "-A", "--", *(paths or ["."]))
         git(self.root, "reset", "-q", "--", ".docs-cache", check=False)
+        # a link to a path outside the repo (the private state dir) never lands in a commit
+        for rel in escaping_symlinks(self.root):
+            git(self.root, "reset", "-q", "--", rel, check=False)
+            self.notes.append(f"Left out {rel}: it links to a path outside the repo.")
         if git(self.root, "diff", "--cached", "--quiet", check=False).returncode == 0:
             return False
         git(self.root, "commit", "-q", "--no-verify", "-m", msg)
@@ -657,6 +661,47 @@ def link_private_state(wt: Path, slug: str) -> None:
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.symlink_to(priv / rel, target_is_directory=True)
+    # A repo's `work/` and `docs/roadmap/` ignore lines end in a slash, which matches a
+    # directory but never a symlink, so the links themselves must be excluded too.
+    exclude_private_links(wt)
+
+
+PRIVATE_LINKS = ("/work", "/docs/roadmap")
+
+
+def exclude_private_links(wt: Path) -> None:
+    """List the private-state links in the checkout's git exclude file (no trailing slash)."""
+    r = git(wt, "rev-parse", "--git-path", "info/exclude", check=False)
+    if r.returncode != 0:
+        return  # not a git checkout
+    fp = Path(r.stdout.strip())
+    if not fp.is_absolute():
+        fp = wt / fp
+    have = fp.read_text(encoding="utf-8").splitlines() if fp.exists() else []
+    missing = [p for p in PRIVATE_LINKS if p not in have]
+    if missing:
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        lead = "\n" if have and have[-1] != "" else ""
+        with open(fp, "a", encoding="utf-8") as fh:
+            fh.write(lead + "\n".join(missing) + "\n")
+
+
+def escaping_symlinks(root: Path) -> List[str]:
+    """Staged symlinks whose target is absolute or leaves the repo (they would publish a local path)."""
+    out = git(root, "diff", "--cached", "--name-only", "--diff-filter=AMT", "-z", check=False).stdout
+    bad = []
+    for rel in filter(None, out.split("\0")):
+        p = root / rel
+        if not p.is_symlink():
+            continue
+        target = os.readlink(p)
+        if os.path.isabs(target):
+            bad.append(rel)
+            continue
+        base = Path(os.path.abspath(root))
+        if not Path(os.path.abspath(p.parent / target)).is_relative_to(base):
+            bad.append(rel)
+    return bad
 
 
 def pin_behind(wt: Path, clone_root: Path) -> Optional[str]:
