@@ -13,10 +13,10 @@
   "docslib/namescan.py": "cb53a88f381f855f42f421bfa89f11e5cf4c8ee91222cdfcb86b898a2e5e1280",
   "docslib/receipts.py": "8bb8943d3da6d482d4362d0b3134856c5b7be1e2cd9e3098f98db8a59c0248d9",
   "docslib/records.py": "eb13ff2dcd0b2661dd370a0d17e8433022dd16492ed91b73a1c68ede37457ddd",
-  "docslib/routine.py": "534dfa8f15dd7d02943b604c7c6524542a3d628184dcb825c43ece365aef3186",
+  "docslib/routine.py": "ab29c4ea820433602be6d19a2610ef2ad34b88b196b298dcc890e897f9fa9e8c",
   "docslib/site.py": "6af410030f0b921d28930abf73f003a00709921f996902134a7554b52b471085",
   "engine/INTERFACE.md": "51a3d1769ac0edf9c9a7b28ed6d1a011b31af6bf514fb5773a28892d3ce4568f",
-  "engine/migrate.py": "e0bdb4766581637c253985618b5b6676174e27bc1b2d44d7b18c054d1106c88c",
+  "engine/migrate.py": "aee045404a8fa617c3858ecadefa72b69c6a0d84d1fd887da956dd948bcf6759",
   "hooks/where_hook.py": "2798362500f18c3214942ffd4c6965952fcd4beb9fd880b0b39f9a20300e0f70",
   "roadmap.py": "4145b9d1cd13288181dc6897e5c7cd36e85943a156f55b6c91d9a0a99aa51f78",
   "templates/githooks/commit-msg": "9909af671167be8cbe195144f551045ac2b7f91d3b6994d589201dc49491a725",
@@ -30,5 +30,5 @@
   "templates/roadmap/milestone-SPEC.md": "83828c988219d631cb44ff7730274e55b686ac1a8f5647230bfd4b8420ff680f",
   "templates/workflows/docs-verify.yml": "b2e7ad3f72a38d7022299d383cb69bc47eb9989aac91f67167ad66c63320cb65"
  },
- "skill_sha": "0343c38a4bfac0473a31e978a5f80558b69e82f0"
+ "skill_sha": "dbaf830eef6bb0dedd5e647dae337dd4c13a8dc8"
 }

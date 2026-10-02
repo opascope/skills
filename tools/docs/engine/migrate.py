@@ -37,6 +37,10 @@ BOT_AUTHORS = {"github-actions", "dependabot", "renovate", "codecov", "vercel", 
 KINDS = {"file", "section", "code", "issue", "bead"}
 DISPOSITIONS = {"keep", "move", "task", "rewrite", "record", "delete", "issue:close-tracked",
                 "issue:close-rejected"}
+DECISIONS_LOG = "docs/roadmap/DECISIONS.md"
+# kept whole files the run itself appends to (approve and init add dated entries): proven by prefix, not equality
+APPEND_ONLY = {DECISIONS_LOG}
+
 ROW_FIELDS = ["item_id", "plugin", "disposition", "source_path", "anchor", "source_hash", "dest",
               "fragments", "omitted", "reason", "last_commit", "receipt", "bd_id", "journal_ref"]
 # Fields beyond the always-present identity fields that each disposition requires.
@@ -1528,7 +1532,7 @@ def approve_confirm(run: Run, args) -> None:
     approval["confirmed"] = {"at": now_iso(), "chat_ref": args.chat_ref}
     write_json(ap, approval)
     counts = disposition_counts(read_jsonl(run.cache / "plan.jsonl"))
-    dec = run.root / "docs/roadmap/DECISIONS.md"
+    dec = run.root / DECISIONS_LOG
     dec.parent.mkdir(parents=True, exist_ok=True)
     existing = dec.read_text(encoding="utf-8") if dec.exists() else "# Decisions\n"
     entry = (f"\n## {run.date} migration map approved\n\n- map_hash: `{mh}`\n- run: `{run.rel_run}`\n"
@@ -1613,7 +1617,14 @@ def apply_plan(run: Run, target: Path, plan: list[dict], inv: dict, mm: MoveMap,
             bdisp = base_disposition(row["disposition"])
             text = span_text(src_text, it["span"]) if it["kind"] == "section" else src_text
             if bdisp == "keep":
-                kept_parts.append(replay(text, path, path, mm))
+                part = replay(text, path, path, mm)
+                if it["kind"] != "section" and path in APPEND_ONLY and (run.root / path).is_file():
+                    # the decision log gains entries during the run (approve, init): keep them when the
+                    # current file still starts with the base text, never rewrite it back to base bytes
+                    cur = (run.root / path).read_text(encoding="utf-8", errors="replace")
+                    if cur.startswith(part.rstrip("\n")):
+                        part = cur
+                kept_parts.append(part)
             elif bdisp == "rewrite":
                 staged = run.cache / "rewrite" / path
                 if not staged.exists():
@@ -1813,6 +1824,9 @@ def verify_tree(run: Run, target: Path, base: str, ledger: list[dict], items: li
                 cur = fp.read_text(encoding="utf-8", errors="replace") if fp.exists() else None
                 if cur is None:
                     fail(iid, "kept file is missing")
+                elif sp in APPEND_ONLY:
+                    if not body_of(cur).startswith(body_of(want).rstrip("\n")):
+                        fail(iid, "append-only file changed other than by appending")
                 elif body_of(cur) != body_of(want):
                     fail(iid, "kept file body changed beyond relinks")
             written.append(sp)
