@@ -1,3 +1,9 @@
+---
+id: verification
+title: "How these skills are verified on Claude Code and Codex CLI"
+owner: maintainers
+covers: ["tests/**"]
+---
 # How these skills are verified on Claude Code and Codex CLI
 
 Run the dependency-free automated checks from a clone:

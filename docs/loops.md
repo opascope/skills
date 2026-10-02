@@ -1,3 +1,9 @@
+---
+id: loops
+title: "Running an unattended Claude Code or Codex loop with real proofs"
+owner: maintainers
+covers: ["kit.py", "lib/loops.py", "loop-builder/references/contract.md"]
+---
 # Running an unattended Claude Code or Codex loop with real proofs
 
 The loop-builder skill writes the contract described in its
