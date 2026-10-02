@@ -7,3 +7,9 @@ __pycache__/
 .opascope-skills-installs.json.*
 .claude/
 .agents/
+
+# manage-docs
+.docs-cache/
+work/
+docs/roadmap/
+.beads/
