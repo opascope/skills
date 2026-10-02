@@ -1,0 +1,30 @@
+{
+  "visibility": "public",
+  "layout_version": 1,
+  "tier": "small",
+  "base_branch": "main",
+  "root_allow": [
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "docs.json",
+    "ARCHITECTURE.md",
+    "shared.md",
+    "VERSION"
+  ],
+  "md_allow": [
+    "docs/**",
+    "work/**",
+    "packages/*/README.md",
+    "apps/*/README.md",
+    ".claude/**",
+    ".agents/**",
+    ".github/**",
+    "*/SKILL.md",
+    "*/shared.md",
+    "*/references/**"
+  ]
+}

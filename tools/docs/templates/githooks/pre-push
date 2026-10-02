@@ -1,0 +1,4 @@
+#!/bin/sh
+# manage-docs deny-term scan (manage-docs v2 section 9). Installed via core.hooksPath=.githooks.
+# git passes the ref updates on stdin; exec hands that stdin to docs.py unchanged.
+exec python3 tools/docs/docs.py hook pre-push "$@"
