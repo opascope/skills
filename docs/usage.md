@@ -1,3 +1,9 @@
+---
+id: usage
+title: "Measuring which Claude Code and Codex skills you actually use"
+owner: maintainers
+covers: ["lib/measurement.py"]
+---
 # Measuring which Claude Code and Codex skills you actually use
 
 `python3 kit.py usage` scans JSONL below the standard Claude Code project

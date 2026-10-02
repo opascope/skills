@@ -13,3 +13,11 @@ Never commit real user transcripts, credentials, private project details, or loc
 machine paths. Use fictional filesystem fixtures. Preserve unowned install paths.
 The optimize skill may write a report, but must never change its audit target.
 Loop completion needs independent command evidence, never just a worker's claim.
+
+<!-- manage-docs:router -->
+## Docs and records
+
+- Docs map: [docs/README.md](docs/README.md), one line per doc with its receipt status.
+- Where does a new file go? `python3 tools/docs/docs.py where "<what it is>"`.
+- Before a PR: `python3 tools/docs/docs.py check`.
+<!-- /manage-docs:router -->
