@@ -181,6 +181,17 @@ def consumers(repo, paths):
     return out
 
 
+def kept_unchanged(root, row) -> bool:
+    """A whole-file keep whose text still hashes to the inventory hash: the run did not touch it, so its
+    existing debt warns instead of failing. Kept sections, and files the run rewrote (relinks), count as touched."""
+    if row.get("anchor") or not row.get("source_hash"):
+        return False
+    fp = Path(root) / row["source_path"]
+    if not fp.is_file() or fp.is_symlink():
+        return False
+    return migrate.sha256_text(fp.read_text(encoding="utf-8", errors="replace")) == row["source_hash"]
+
+
 def verify(repo, ledger):
     """Section 6 checks over the migrated tree: debt warns, paths the run touched fail; rewrite
     receipts' covers_hash recomputed (the engine checks doc_hash)."""
@@ -189,7 +200,8 @@ def verify(repo, ledger):
     touched = set()
     for row in ledger:
         touched.update(row.get("dest") or [])
-        if row.get("disposition") in ("keep", "rewrite"):
+        if row.get("disposition") == "rewrite" or (row.get("disposition") == "keep"
+                                                   and not kept_unchanged(repo.root, row)):
             touched.add(row["source_path"])
     out = []
     for r in checks.run(ctx):

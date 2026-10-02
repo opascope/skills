@@ -332,10 +332,16 @@ def approval_section(doc_lines: List[str], roadmap_lines: List[str]) -> str:
     return "\n".join(parts)
 
 
-def pr_body(section: str, changes: List[dict]) -> str:
+def approver(cfg: Optional[dict] = None) -> str:
+    """Who approves daily PRs, as written into them; a public repo never names the owner."""
+    owner = site.get("owner")
+    return "the owner" if not owner or config.is_public(cfg or {}) else owner
+
+
+def pr_body(section: str, changes: List[dict], cfg: Optional[dict] = None) -> str:
     fps = sorted(({"op": c["op"], "path": c["path"], "input": c["input"]} for c in changes),
                  key=lambda c: fp_key(c))
-    return (f"Daily docs maintenance. Merges only on {site.get('owner')}'s Approve (manage-docs v2 section 8).\n\n"
+    return (f"Daily docs maintenance. Merges only on {approver(cfg)}'s Approve (manage-docs v2 section 8).\n\n"
             + section + "\n\n<!-- manage-docs:changes " + json.dumps(fps, sort_keys=True) + " -->\n")
 
 
@@ -379,7 +385,7 @@ class Maintain:
     def note_suppressed(self, c: dict) -> bool:
         r = suppressed(c, self.rejected, self.now)
         if r:
-            self.notes.append(f"Held back a change {site.get('owner')} rejected on PR #{r['pr']} ({r['reason']}): {c['path']}.")
+            self.notes.append(f"Held back a change {approver(self.cfg)} rejected on PR #{r['pr']} ({r['reason']}): {c['path']}.")
             return True
         return False
 
@@ -597,7 +603,7 @@ def maintain_here(root: Path, cfg: dict, slug: str, runtime: str, plugins=(), ve
         print(f"maintain {slug}: nothing to change" + ("".join(f"\n  note: {n}" for n in m.notes)))
         return 0
     section = approval_section(docs_lines(all_changes, m.notes), roadmap_lines(plugins, root, all_changes))
-    body = pr_body(section, all_changes)
+    body = pr_body(section, all_changes, cfg)
     if config.is_public(cfg):
         from docslib import namescan
         terms = namescan.load_list(namescan.default_list_path(cfg))
@@ -662,9 +668,11 @@ def pin_behind(wt: Path, clone_root: Path) -> Optional[str]:
         have = json.loads(pin.read_text(encoding="utf-8")).get("skill_sha")
     except ValueError:
         return None
+    if not Path(clone_root).is_dir():
+        return None  # no dedicated clone to compare against (git cannot even start in a missing folder)
     h = git(clone_root, "rev-parse", "HEAD", check=False)
     if h.returncode != 0:
-        return None  # no dedicated clone to compare against
+        return None  # not a git checkout
     head = h.stdout.strip()
     if not have or have == head:
         return None
