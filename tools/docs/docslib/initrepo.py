@@ -495,6 +495,24 @@ def main_checkout(repo: Path) -> Path:
     return Path(repo).resolve()
 
 
+def active_default_hooks(repo: Path) -> List[str]:
+    """Hooks the clone runs today from its default hooks folder (<git-common-dir>/hooks), samples excluded."""
+    p = sh(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=repo, check=False)
+    hooks = Path(p.stdout.strip()) / "hooks" if p.returncode == 0 and p.stdout.strip() else None
+    if hooks is None or not hooks.is_dir():
+        return []
+    return sorted(f.name for f in hooks.iterdir()
+                  if f.is_file() and not f.name.endswith(".sample") and os.access(f, os.X_OK))
+
+
+def label_description(cfg: dict) -> str:
+    """The approval label's description; a public repo never names the owner (no personal names in public)."""
+    owner = site.get("owner")
+    if config.is_public(cfg) or not owner:
+        return "manage-docs daily PR awaiting the owner's approval"
+    return f"manage-docs daily PR awaiting {owner}'s approval"
+
+
 def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None) -> Tuple[bool, List[str]]:
     repo = Path(repo)
     cfg = config.load(repo)
@@ -505,7 +523,12 @@ def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None)
         # core.hooksPath is SHARED by every worktree of the clone, so an existing value is the owner's choice
         # (an absolute path pins every worktree to one checkout's hooks); only an unset one is filled in
         cur = sh(["git", "config", "--get", "core.hooksPath"], cwd=repo, check=False).stdout.strip()
-        if not cur:
+        live = active_default_hooks(repo) if not cur else []
+        if live:
+            # setting hooksPath would silently switch these off in every worktree of the clone
+            done.append(f"core.hooksPath left unset: .git/hooks has active hooks ({', '.join(live)}); the docs "
+                        "hooks are not active (the owner moves those hooks into .githooks/, or sets hooksPath)")
+        elif not cur:
             sh(["git", "config", "core.hooksPath", ".githooks"], cwd=repo)
             done.append("core.hooksPath=.githooks")
         elif cur.rstrip("/").endswith(".githooks"):
@@ -531,7 +554,7 @@ def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None)
             done.append(f"FAILED ruleset; run as an admin: echo '{payload}' | gh api -X POST repos/{name}/rulesets "
                         "--input -   (auto-merge stays off for this repo until the check is required)")
     lab = sh([gh_bin(), "label", "create", routine.LABEL, "--color", "D4C5F9", "--description",
-              f"manage-docs daily PR awaiting {site.get('owner')}'s approval"], cwd=repo, check=False)
+              label_description(cfg)], cwd=repo, check=False)
     done.append(f"label {routine.LABEL} " + ("created" if lab.returncode == 0 else "exists or not creatable"))
     il = sh([gh_bin(), "issue", "list", "--state", "open", "--search", f"{routine.HEARTBEAT_TITLE} in:title",
              "--json", "number,title"], cwd=repo, check=False)
