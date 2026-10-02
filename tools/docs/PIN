@@ -1,0 +1,33 @@
+{
+ "files": {
+  "docs.py": "b777c433221b9cf50b6c72fdf2c159997bf17a5fe2b10d5c7092f22c435cc6db",
+  "docslib/__init__.py": "27d53fe5232c3b9a9446c061d3aeb55de0309b4967919a27abbc0e41a68b40c2",
+  "docslib/_engine.py": "78c740197e878ab55f413c704f9d856dd9e56c0817d25f911ed95347cdfd6456",
+  "docslib/checks.py": "4d3f313b0f2c5cc599e5f68daaff367bedf6b60f3451accc8b8b4711aceb8f51",
+  "docslib/coldread.py": "730b165f7abaa2c4d4d14cac21a8faa61b07de0f96f7d098fd7679c3f25b43ed",
+  "docslib/config.py": "e84ab6b221628ad0087559aaccbf6138cd53eb76fd0fdd04df3c2fd17cf69e73",
+  "docslib/frontmatter.py": "c83241bc41eec4b75315267c5312a6670e86e8edb09699620c0ae82b25321638",
+  "docslib/generate.py": "0e5271f8e12d2a2390279da48086bfd92109f9c7f5d64def68b256e005a29e20",
+  "docslib/globs.py": "a1fe6652a059f0ce2b67b040a09d46e83bdc783d01c8b906f397a18107e6ca40",
+  "docslib/initrepo.py": "fc6e8393cd7b2185818dd8359a06a6abbfbfa237637d5ee8c16a6757d9ad8169",
+  "docslib/namescan.py": "9f06b95484a8226be1690c205bb84eaac98ac8856c64427f99fa97c408f4ba0c",
+  "docslib/receipts.py": "8bb8943d3da6d482d4362d0b3134856c5b7be1e2cd9e3098f98db8a59c0248d9",
+  "docslib/records.py": "eb13ff2dcd0b2661dd370a0d17e8433022dd16492ed91b73a1c68ede37457ddd",
+  "docslib/routine.py": "36d15069a41e2dec6d00c593969fc689aa24726513d11fdce2a36b3d58b44ff1",
+  "engine/INTERFACE.md": "2c383a5d82f8647889cb8413eeb0154a1ee3cd3b1235d46175df30ca4c4372e2",
+  "engine/migrate.py": "f4503cd529229e7e757ae2e0a2dcec92c6a07d151b1aca64159ff1e24eb0ad4f",
+  "hooks/where_hook.py": "2798362500f18c3214942ffd4c6965952fcd4beb9fd880b0b39f9a20300e0f70",
+  "roadmap.py": "f7b073f65a8e8efcfc92afeda6565d3b8f6ef0e6317aecd52e9f1025a60a6a35",
+  "templates/githooks/commit-msg": "9909af671167be8cbe195144f551045ac2b7f91d3b6994d589201dc49491a725",
+  "templates/githooks/pre-commit": "d54bcfac8d9391cf6e9e1a1eabcbed904433c06fe4764d93f7fa33d6c6e3e5ff",
+  "templates/githooks/pre-push": "bdfc4c78b77937cae48acc591124a13c64cf6ec8847ccdf06969da94b9dd4a45",
+  "templates/roadmap/DECISIONS.md": "360d4200eeeb5f3f4261e38066a99528b0f37b908a9c6d60f935524aeef969e7",
+  "templates/roadmap/ROADMAP.md": "133a18951f177e697098b24d29f4ec8fdb364fbe629f02d0a12c25fc2dae8cc2",
+  "templates/roadmap/STOP-AND-ASK.md": "0fcebf7203424ed1892209d2d2529ecfe15994b6e24ba9d685104ed7fec0d945",
+  "templates/roadmap/VISION.md": "2910b5d22f0ba1cc794e1867396a6254055d7801fae580cd3693fc2990235990",
+  "templates/roadmap/epic.md": "0b2123d9640dccbd30b0ad9bb046002be63d804837c6f4940d02b1de6f5ec78c",
+  "templates/roadmap/milestone-SPEC.md": "83828c988219d631cb44ff7730274e55b686ac1a8f5647230bfd4b8420ff680f",
+  "templates/workflows/docs-verify.yml": "b2e7ad3f72a38d7022299d383cb69bc47eb9989aac91f67167ad66c63320cb65"
+ },
+ "skill_sha": "447e5eaa3cffc4b2c432b1cf2f726ac78a0c99b5"
+}

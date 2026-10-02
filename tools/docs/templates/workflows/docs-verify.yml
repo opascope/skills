@@ -1,0 +1,82 @@
+# manage-docs verify (manage-docs v2 section 6; contract sections 2 and 5).
+# Vendored by `docs.py init --stage pr1`; changes only in a docs/bootstrap or docs/upgrade-<sha> PR (X6).
+#
+# docs-verify (REQUIRED by the ruleset): runs on pull_request_target, so the workflow AND the checker
+# come from the BASE branch. The PR head is checked out as data only (never executed), and the
+# base engine checks it: `docs.py check --pr <base>`. Drift is an annotation, never a failure (R7).
+#
+# docs-bootstrap: the bootstrap PR adds this workflow, so no base engine exists yet. It runs the
+# PR's own vendored checker after proving the vendored files match tools/docs/PIN. It does nothing
+# once the base branch has tools/docs/.
+name: docs-verify
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: docs-verify-${{ github.event_name }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  docs-verify:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout base (trusted code)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: Checkout PR head (data only)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "__PYTHON_VERSION__"
+      - name: Check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ ! -f base/tools/docs/docs.py ]; then
+            echo "base has no tools/docs yet (bootstrap PR); the docs-bootstrap job checks it"
+            exit 0
+          fi
+          git -C head cat-file -e "$BASE_SHA" 2>/dev/null || git -C head fetch -q origin "$BASE_SHA"
+          python3 base/tools/docs/docs.py --repo head check --pr "$BASE_SHA" --head-ref "$HEAD_REF" --annotate
+
+  docs-bootstrap:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "__PYTHON_VERSION__"
+      - name: Bootstrap check (only while the base has no engine)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git cat-file -e "$BASE_SHA:tools/docs/docs.py" 2>/dev/null; then
+            echo "base has tools/docs; docs-verify (pull_request_target) is the check"
+            exit 0
+          fi
+          python3 tools/docs/docs.py check --pr "$BASE_SHA" --head-ref "$HEAD_REF" --annotate
