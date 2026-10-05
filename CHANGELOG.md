@@ -14,7 +14,9 @@
   shown before every run.
 - Both new skills need an OpenRouter key. Without one they stop and tell you what
   to add.
-- Live checks passed for every skill on Claude Code and Codex.
+- Live model-backed checks on Claude Code and Codex are documented in
+  [docs/verification.md](docs/verification.md); recorded per-release results run
+  through 0.4.0.
 
 ## 0.5.1
 
@@ -48,7 +50,8 @@
 - `kit.py update` now lists what changed. The upgrade from 0.3.0 runs 0.3.0's
   update code, so this list first appears on the next upgrade.
 - Final live runs: every skill plus the router on both runtimes, all 45 checks
-  held on each, fixtures unchanged. See docs/verification.md.
+  held on each, fixtures unchanged. See the archived release results at
+  `work/evidence/2026-10-05-skills-release-results/results.md`.
 
 ## 0.3.0
 
@@ -62,7 +65,8 @@
   promise, including a plan penalised for admitting it had no independent
   reviewer. It found no skill breaking a promise.
 - Final runs: every skill plus the router on both runtimes, all 36 checks held
-  on each, fixtures unchanged. See docs/verification.md.
+  on each, fixtures unchanged. See the archived release results at
+  `work/evidence/2026-10-05-skills-release-results/results.md`.
 - The outputs that once slipped past, and the correct ones once wrongly failed,
   ship as tests.
 - The router's promise said it points you at a skill "instead of picking one for

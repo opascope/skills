@@ -268,7 +268,7 @@ No. It sends no telemetry and runs no background update process. The usage comma
 It exits with a distinct status for blocker, iteration cap, timeout, or three calls without measurable progress. It preserves every file. None of those is reported as success. A later explicit run resumes from the files, even on the other runtime.
 
 **How do I know it actually works?**
-`python3 -m unittest discover -s tests -v` runs 122 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), including the 0.1.0 release results on both runtimes.
+`python3 -m unittest discover -s tests -v` runs 122 standard-library tests in temporary directories. Live model-backed verification is documented in [docs/verification.md](docs/verification.md), which also points to the archived per-release live-run results.
 
 ## Verification
 
