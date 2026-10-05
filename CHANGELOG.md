@@ -50,8 +50,8 @@
 - `kit.py update` now lists what changed. The upgrade from 0.3.0 runs 0.3.0's
   update code, so this list first appears on the next upgrade.
 - Final live runs: every skill plus the router on both runtimes, all 45 checks
-  held on each, fixtures unchanged. See the archived release results at
-  `work/evidence/2026-10-05-skills-release-results/results.md`.
+  held on each, fixtures unchanged. See the archived release results
+  (`git show 69dd74c:docs/verification.md`).
 
 ## 0.3.0
 
@@ -65,8 +65,8 @@
   promise, including a plan penalised for admitting it had no independent
   reviewer. It found no skill breaking a promise.
 - Final runs: every skill plus the router on both runtimes, all 36 checks held
-  on each, fixtures unchanged. See the archived release results at
-  `work/evidence/2026-10-05-skills-release-results/results.md`.
+  on each, fixtures unchanged. See the archived release results
+  (`git show 69dd74c:docs/verification.md`).
 - The outputs that once slipped past, and the correct ones once wrongly failed,
   ship as tests.
 - The router's promise said it points you at a skill "instead of picking one for

@@ -47,9 +47,9 @@ the same proofs then pass, and rerunning needs no further runtime call.
 ## Archived release results
 
 The per-release live-run results for 0.1.0, 0.3.0 and 0.4.0 were moved out of
-this public document to keep it focused on how verification works. They are kept
-as a local maintainer evidence record at
-`work/evidence/2026-10-05-skills-release-results/results.md`.
+this document to keep it focused on how verification works. They remain in the
+repository history: `git show 69dd74c:docs/verification.md` prints the document
+as it stood with all three results.
 
 ## Publication checks
 
