@@ -29,16 +29,26 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from docslib import config, frontmatter, generate, receipts, records, site
+from docslib import checks, config, frontmatter, generate, receipts, records, site
 
 BRANCH = "docs/maintain"
-LABEL = "docs-approval-pending"
+LABEL = "docs-maintain"
 HEARTBEAT_TITLE = "manage-docs heartbeat"
 APPROVAL_OPEN, APPROVAL_CLOSE = "<!-- manage-docs:approval -->", "<!-- /manage-docs:approval -->"
 CHANGES_RX = re.compile(r"<!-- manage-docs:changes (.*?) -->", re.S)
-INFLIGHT = re.compile(r"^docs/(bootstrap|migrate-|port-|upgrade-)")
+INFLIGHT = re.compile(r"^docs/(bootstrap|migrate-|port-)")
+# An open docs/upgrade-<sha> PR (checks.UPGRADE_BRANCH) is not a skip: run_repo gates it like the daily
+# PR (review + CI at head) and holds the repo's maintenance until it lands.
 SUPPRESS_DAYS = 30
 SUPERSEDED = "manage-docs: superseded by a fresh run (conflict)"
+REVIEW_COMMENT = "@codex review"
+# A daily PR closed unmerged is rejected: its change suppresses for 30 days. An
+# explicit `manage-docs:reject <reason>` on that closed PR names the reason; a close is the only trusted
+# rejection trigger (free text on an OPEN PR is never inferred as a verdict).
+LEGACY_REJECT_RX = re.compile(r"^manage-docs:reject\s*(.*)", re.S)
+CODEX_LOGINS = {"chatgpt-codex-connector[bot]", "chatgpt-codex-connector"}  # mirrors codex_gate.py
+USAGE_LIMIT_RX = re.compile(r"usage limit", re.I)
+NWO_RX = re.compile(r"github\.com/([^/]+/[^/]+)/(?:pull|issues)/")
 
 
 # ------------------------------------------------------------------ homes + small helpers
@@ -91,6 +101,16 @@ def gh_json(root: Path, *args):
 
 class RoutineError(Exception):
     pass
+
+
+def state_after_merge(root: Path, number: int) -> str:
+    """The PR's state read right after `gh pr merge` succeeded, upper-cased. Any failure to read it is ""
+    (not MERGED), so the caller holds: the merge may have only queued the PR, and maintenance must never
+    push to a queued branch it could not confirm landed."""
+    try:
+        return ((gh_json(root, "pr", "view", str(number), "--json", "state") or {}).get("state") or "").upper()
+    except Exception:  # noqa: BLE001 -- unreadable state is a hold, whatever the cause
+        return ""
 
 
 # ------------------------------------------------------------------ quota (8.2 step 1; OV3, R14)
@@ -192,10 +212,27 @@ class RoutineLock:
 # ------------------------------------------------------------------ skips + heartbeat (8.2 step 3, 8.4)
 
 def load_repos() -> List[dict]:
+    """The enrolled repos, one per checkout. When two entries share a checkout (a legacy slug left beside its
+    renamed one), the one whose slug is a site.json seed key wins, else the first; the other is skipped with
+    a warning, so one repo never runs twice in a cycle (Codex P2s on #1118)."""
     p = config_home() / "repos.json"
     if not p.exists():
         return []
-    return json.loads(p.read_text(encoding="utf-8"))
+    canonical = set(site.get("seeds") or {})
+    out: List[dict] = []
+    at: Dict[str, int] = {}
+    for e in json.loads(p.read_text(encoding="utf-8")):
+        key = str(Path(e["path"]).expanduser().resolve())
+        if key not in at:
+            at[key] = len(out)
+            out.append(e)
+            continue
+        kept = out[at[key]]
+        if e.get("slug") in canonical and kept.get("slug") not in canonical:
+            out[at[key]], kept, e = e, e, kept
+        print(f"manage-docs: repos.json lists {key} twice ({kept.get('slug')!r} and {e.get('slug')!r}); "
+              f"running {kept.get('slug')!r}, skipping {e.get('slug')!r}", file=sys.stderr)
+    return out
 
 
 def migration_lock(repo_path: Path) -> Path:
@@ -264,29 +301,54 @@ def suppressed(c: dict, rejected: List[dict], now: dt.datetime) -> Optional[dict
     return None
 
 
+def closed_reason(comments: List[dict]) -> str:
+    """A human-readable reason for suppressing a CLOSED (unmerged) daily PR. Only a privileged actor can
+    close a PR, so reading its comments here is safe (unlike scanning an OPEN PR, which any commenter can
+    write to). An explicit `manage-docs:reject <reason>` is used verbatim; otherwise "closed unmerged"."""
+    for c in comments:
+        m = LEGACY_REJECT_RX.match((c.get("body") or "").strip())
+        if m:
+            return (m.group(1).strip() or "(no reason given)")[:200]
+    return "closed unmerged"
+
+
+def suppress_fingerprints(slug: str, changes: List[dict], now: dt.datetime, reason: str,
+                          pr_number) -> List[dict]:
+    """Record a 30-day suppression for each change fingerprint {op, path, input}, dropping expired rows.
+    Shared by the two rejection triggers: a PR closed unmerged (process_rejection) and a trusted,
+    head-anchored findings verdict consumed at the merge gate (try_merge_daily_pr)."""
+    new_rows = [{"op": ch["op"], "path": ch["path"], "input": ch["input"], "reason": reason,
+                 "rejected_at": iso(now), "pr": pr_number} for ch in changes]
+    keep = [r for r in load_rejected(slug) if (now - dt.datetime.fromisoformat(
+        r["rejected_at"].replace("Z", "+00:00"))).days < SUPPRESS_DAYS]
+    save_rejected(slug, keep + new_rows)
+    return new_rows
+
+
 def process_rejection(repo_root: Path, slug: str, now: dt.datetime) -> List[dict]:
-    """Read the previously opened daily PR; if the owner rejected it, suppress its fingerprints."""
+    """Read the previously opened daily PR. A CLOSE that is not a merge rejects it: its fingerprints
+    suppress for 30 days (no owner-only trigger). A MERGE is acceptance. An OPEN PR is
+    left untouched here: a reviewer's "changes needed" is NOT inferred from free-text on an open PR
+    (any commenter could forge it, a stale verdict could trigger it). The trusted rejection signals are a
+    privileged CLOSE (handled here) and the merge gate's head-anchored findings verdict, which
+    try_merge_daily_pr consumes directly (closing + suppressing) before this runs."""
     sp = state_dir(slug) / "open-pr.json"
     if not sp.exists():
         return []
     st = json.loads(sp.read_text(encoding="utf-8"))
     view = gh_json(repo_root, "pr", "view", str(st["number"]), "--json", "state,comments") or {}
-    if view.get("state") == "OPEN":
+    state = view.get("state", "OPEN")
+    comments = view.get("comments") or []
+    if state == "OPEN":
+        return []  # leave it for the merge gate, a reviewer, or the lead
+    if state == "MERGED":  # merged = accepted; clear the pointer, suppress nothing
+        sp.replace(state_dir(slug) / f"merged-pr-{st['number']}.json")
         return []
-    new_rows = []
-    if view.get("state") == "CLOSED":
-        reason = None
-        for c in view.get("comments") or []:
-            m = re.match(r"^manage-docs:reject\s*(.*)", (c.get("body") or "").strip(), re.S)
-            if m:
-                reason = m.group(1).strip() or "(no reason given)"
-        if reason is not None:
-            for ch in st.get("changes", []):
-                new_rows.append({"op": ch["op"], "path": ch["path"], "input": ch["input"], "reason": reason,
-                                 "rejected_at": iso(now), "pr": st["number"]})
-            keep = [r for r in load_rejected(slug) if (now - dt.datetime.fromisoformat(
-                r["rejected_at"].replace("Z", "+00:00"))).days < SUPPRESS_DAYS]
-            save_rejected(slug, keep + new_rows)
+    # CLOSED but not merged: a privileged actor closed it -> a rejection.
+    if any((c.get("body") or "").strip() == SUPERSEDED for c in comments):
+        sp.replace(state_dir(slug) / f"closed-pr-{st['number']}.json")
+        return []  # the routine's own conflict-supersede close, not a rejection
+    new_rows = suppress_fingerprints(slug, st.get("changes", []), now, closed_reason(comments), st["number"])
     sp.replace(state_dir(slug) / f"closed-pr-{st['number']}.json")
     return new_rows
 
@@ -332,22 +394,238 @@ def approval_section(doc_lines: List[str], roadmap_lines: List[str]) -> str:
     return "\n".join(parts)
 
 
-def approver(cfg: Optional[dict] = None) -> str:
-    """Who approves daily PRs, as written into them; a public repo never names the owner."""
-    owner = site.get("owner")
-    return "the owner" if not owner or config.is_public(cfg or {}) else owner
-
-
 def pr_body(section: str, changes: List[dict], cfg: Optional[dict] = None) -> str:
     fps = sorted(({"op": c["op"], "path": c["path"], "input": c["input"]} for c in changes),
                  key=lambda c: fp_key(c))
-    return (f"Daily docs maintenance. Merges only on {approver(cfg)}'s Approve (manage-docs v2 section 8).\n\n"
+    return ("Daily docs maintenance. Reviewed like any agent PR (a review is requested when the head "
+            "moves). A later routine run may merge this automatically once there is a clean independent "
+            "review at the current head AND green required CI at that head, pinned to the reviewed head; "
+            "a reviewer or a maintainer can also merge it. The "
+            "routine never merges on its own judgement.\n\n"
             + section + "\n\n<!-- manage-docs:changes " + json.dumps(fps, sort_keys=True) + " -->\n")
 
 
 def changes_from_body(body: str) -> List[dict]:
     m = CHANGES_RX.search(body or "")
     return json.loads(m.group(1)) if m else []
+
+
+def ensure_label(root: Path) -> None:
+    """Create the daily-PR marker label if it is missing, so --label/--add-label never fails on a repo
+    that has not had `init --stage local` run since the label was renamed. Idempotent; never fatal."""
+    gh(root, "label", "create", LABEL, "--color", "D4C5F9", "--description",
+       "manage-docs daily docs maintenance PR", check=False)
+
+
+def request_review(root: Path, number: int, env: Optional[Dict[str, str]] = None) -> bool:
+    """Request an independent review on the daily PR. The comment is a human-visible emission, so it is
+    posted ONLY through the ledgered command the routine injects (MANAGE_DOCS_REVIEW_CMD, resolved from
+    site.json for EVERY enrolled repo so no repo takes an unledgered path). There is deliberately NO
+    plain `gh pr comment` fallback: with no command (a direct/manual maintain_here call outside the
+    routine) the request is skipped with a loud note rather than posted unledgered. The routine never
+    merges; it only asks for review.
+
+    Returns True only when a review was actually posted, False when it was skipped for lack of a command,
+    and raises on a configured command that fails. The caller must advance its recorded requested-head
+    ONLY on True, so a skipped (or failed) request leaves the head pending and a later run with the
+    command retries, instead of a manual no-command run marking the head as reviewed forever."""
+    src = os.environ if env is None else env  # the routine passes review_env() for an upgrade PR
+    comment = src.get("MANAGE_DOCS_REVIEW_COMMENT") or REVIEW_COMMENT
+    cmd_json = src.get("MANAGE_DOCS_REVIEW_CMD")
+    if not cmd_json:
+        print(f"maintain: review not requested on PR #{number} (no ledgered comment command configured); "
+              "a reviewer or the lead requests it", file=sys.stderr)
+        return False
+    try:
+        cmd = json.loads(cmd_json)
+    except ValueError as exc:
+        raise RoutineError(f"MANAGE_DOCS_REVIEW_CMD is not valid JSON: {exc}")
+    p = subprocess.run([*cmd, str(number), comment], cwd=root, capture_output=True, text=True)
+    if p.returncode != 0:
+        # Fail-closed: a ledger refusal (or any failure) means the comment did not post. Surface it
+        # loudly; the PR stays open and unreviewed until a human re-triggers review.
+        raise RoutineError(f"review request not posted (ledgered command exit {p.returncode}): "
+                           f"{(p.stderr or p.stdout).strip()[:300]}")
+    return True
+
+
+# ------------------------------------------------------------------ deterministic merge
+
+def _nwo_from_url(url: Optional[str]) -> Optional[str]:
+    m = NWO_RX.search(url or "")
+    return m.group(1) if m else None
+
+
+def merge_gate_cmd(slug: str, clone_root: Path) -> Optional[list]:
+    """The command that reports a PR's independent-review verdict by exit code (0 = clean at head), or
+    None when this repo has no gate configured and so never auto-merges. A home repo wires its reviewer
+    gate (e.g. the Codex gate) in site.json `merge_gate.command`, per seed; `MANAGE_DOCS_MERGE_GATE_CMD`
+    overrides it. The gate's script path is resolved absolute against the home clone (pinned to
+    origin/<base>), NOT the enrolled checkout, so a stale or locally modified gate on a feature branch
+    cannot return a false verdict. The verdict logic is NOT reimplemented here: this only runs the gate
+    and reads its exit code (0 clean, 1 open findings, 2 not-reviewed-at-head/stale, else unknown)."""
+    env = os.environ.get("MANAGE_DOCS_MERGE_GATE_CMD")
+    if env:
+        try:
+            return json.loads(env)  # an explicit override (e.g. a test) is used verbatim
+        except ValueError as exc:
+            raise RoutineError(f"MANAGE_DOCS_MERGE_GATE_CMD is not valid JSON: {exc}")
+    rr = dict(site.get("merge_gate") or {})
+    seed = (site.get("seeds") or {}).get(slug) or {}
+    rr.update(seed.get("merge_gate") or {})
+    cmd = rr.get("command")
+    return _abs_cmd(cmd, clone_root) if cmd else None
+
+
+CI_PASS_STATES = {"SUCCESS", "NEUTRAL", "SKIPPED", "SKIPPING", "PASS"}
+
+
+def ci_green(root: Path, number: int) -> bool:
+    """Only the REQUIRED checks must be green. `gh pr checks --required` returns just the
+    branch-required checks for the PR's current head, so a pending or failed OPTIONAL workflow (a repo
+    may run several alongside its required check) never makes a clean PR look red. Green iff at least one
+    required check is reported and every one is in a pass state."""
+    p = gh(root, "pr", "checks", str(number), "--required", "--json", "state,bucket", check=False)
+    out = (p.stdout or "").strip()
+    if not out:
+        return False  # gh prints nothing + exits non-zero when there are no required checks -> not provably green
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return False
+    if not data:
+        return False
+    return all((c.get("state") or c.get("bucket") or "").upper() in CI_PASS_STATES for c in data)
+
+
+def codex_capped_at_head(root: Path, nwo: str, number: int, head: str) -> bool:
+    """A reviewer usage-limit reply newer than the head commit means no review is coming for this head
+    (`.claude/skills/codex-comments/SKILL.md`, "Fallback: Codex hit its usage limit"). Best-effort: any
+    read failure returns False so it only ever refines the report, never blocks."""
+    try:
+        comments = gh_json(root, "api", f"repos/{nwo}/issues/{number}/comments", "--paginate") or []
+        capped = [c.get("created_at") for c in comments
+                  if (c.get("user") or {}).get("login") in CODEX_LOGINS
+                  and USAGE_LIMIT_RX.search(c.get("body") or "")]
+        if not capped:
+            return False
+        commit = gh_json(root, "api", f"repos/{nwo}/commits/{head}") or {}
+        head_at = (((commit.get("commit") or {}).get("committer") or {}).get("date")) or ""
+        return bool(head_at) and max(c for c in capped if c) > head_at
+    except (RoutineError, ValueError, KeyError, TypeError):
+        return False
+
+
+def behind_base_note(root: Path, nwo: Optional[str], slug: str, number: int, label: str) -> Optional[str]:
+    """update_before_merge (site.json): None when the PR may merge now, else why it waits. A BEHIND branch
+    is updated (merge commit, never force) and left for the next run's review + CI at the new head; an
+    unknown merge state also defers, because it cannot confirm the branch is current."""
+    if not (nwo and slug in (site.get("update_before_merge") or [])):
+        return None
+    mss = (gh_json(root, "pr", "view", str(number), "--json", "mergeStateStatus") or {}).get("mergeStateStatus")
+    if mss == "BEHIND":
+        upd = gh(root, "pr", "update-branch", str(number), "--repo", nwo, check=False)
+        if upd.returncode != 0:
+            return (f"{label}: left open (branch behind base; update failed: "
+                    f"{(upd.stderr or upd.stdout).strip()[:100]})")
+        return f"{label}: updated branch to base; a clean review + green CI at the new head lands it next run"
+    if mss in (None, "", "UNKNOWN"):
+        return f"{label}: left open (merge state {mss or 'unknown'}; cannot confirm the branch is current with base)"
+    return None
+
+
+def try_merge_daily_pr(root: Path, entry: dict, clone_root: Path,
+                       now: Optional[dt.datetime] = None) -> Optional[str]:
+    """Deterministic merge of an open docs-maintain PR at the START of a routine run:
+    merge ONLY on a clean independent review at the CURRENT head AND green required CI, pinned to that
+    head with `--match-head-commit`. Never on the routine's own judgement. Any miss leaves the PR for a
+    reviewer or the lead. Returns a one-line outcome, or None when there is no open daily PR.
+
+    `root` is the enrolled checkout the PR lives in; `clone_root` is the pinned home clone the merge gate
+    resolves against, so a stale or modified gate on the feature branch cannot return a false verdict."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    slug = entry["slug"]
+    pr = open_daily_pr(root)
+    if pr is None:
+        return None
+    number, head = pr["number"], pr.get("headRefOid") or ""
+    # open_daily_pr selects the PR by its docs/maintain HEAD only; the merge path must also confirm the
+    # PR still targets the configured base. A PR retargeted to another branch (e.g. main) would otherwise
+    # be reviewed, closed, or MERGED INTO THAT BRANCH here, and --match-head-commit pins only the head,
+    # not the base. Refuse to run the gate or touch the PR when the base differs; leave it for a human.
+    want_base = entry.get("base_branch", "main")
+    base = pr.get("baseRefName")
+    if base != want_base:
+        return (f"daily PR #{number}: left untouched (PR base is {base!r}, not the configured "
+                f"{want_base!r}; refusing to gate, close, or merge a retargeted PR)")
+    cmd = merge_gate_cmd(slug, clone_root)
+    if not cmd:
+        return f"daily PR #{number}: left open (no merge gate; a reviewer or the lead merges)"
+    if not head:
+        return f"daily PR #{number}: left open (could not read the PR head)"
+    nwo = _nwo_from_url(pr.get("url"))
+    repo_args = ["--repo", nwo] if nwo else []
+    # 1 + 3: an independent review is clean AND head-anchored (the gate exits 0 only at the reviewed head)
+    try:
+        gate = subprocess.run([*cmd, *repo_args, "--pr", str(number), "--head", head], cwd=clone_root,
+                              capture_output=True, text=True)
+    except OSError as exc:
+        return f"daily PR #{number}: left open (merge gate failed to run: {exc})"
+    if gate.returncode == 1:
+        # OPEN findings head-anchored to the current head is a TRUSTED rejection (codex_gate reads the
+        # review + review-thread surfaces that `gh pr view --json comments` cannot). try_merge CLOSES the
+        # PR on this verdict and nothing more: the suppression is left to process_rejection, which runs
+        # next (maintain_here), sees the now-CLOSED PR this branch set, and writes BOTH records -- the
+        # 30-day suppression in rejected.json (suppress_fingerprints) AND the committed work/runs
+        # rejection record (write_rejection_record) -- then rotates the pointer. Closing FIRST and
+        # suppressing SECOND means a failed close suppresses nothing (no "held back but still open"
+        # inconsistency), and process_rejection never has to read inline findings: it keys only off the
+        # CLOSED state. Closing is a retraction, not new wire content, so it is not a ledgered emission.
+        # The gate verdict covers the `head` captured at the top of this run. If another actor pushed a
+        # fix in between, that new head was never rejected, and `gh pr close` has no --match-head-commit
+        # guard; re-read the live head and abort the close unless it still equals the reviewed head
+        # (`.claude/rules/pr-review.md`: a verdict binds only the head it named).
+        live = (gh_json(root, "pr", "view", str(number), "--json", "headRefOid") or {}).get("headRefOid") or ""
+        if live and live != head:
+            return (f"daily PR #{number}: left open (head moved to {live[:10]} under the review; "
+                    "not closing on a verdict that did not cover it)")
+        try:
+            gh(root, "pr", "close", str(number))
+        except RoutineError as exc:
+            return f"daily PR #{number}: left open (could not close after review findings: {str(exc)[:100]})"
+        git(root, "push", "-q", "origin", "--delete", BRANCH, check=False)
+        return (f"daily PR #{number}: closed (independent review found changes at head; "
+                "process_rejection holds the fingerprints back 30 days)")
+    if gate.returncode != 0:
+        if gate.returncode == 2 and nwo and codex_capped_at_head(root, nwo, number, head):
+            return f"daily PR #{number}: left open (review capped; a fallback reviewer is a lead action)"
+        verdict = {2: "not reviewed at head", 3: "review state unknown"}.get(
+            gate.returncode, f"gate exit {gate.returncode}")
+        return f"daily PR #{number}: left open (review not clean at head: {verdict})"
+    # 2: only the REQUIRED CI must be green
+    if not ci_green(root, number):
+        return f"daily PR #{number}: left open (required CI not green at head)"
+    # update_before_merge (a repo opts into it in site.json; see initrepo.UPDATE_BEFORE_MERGE): these
+    # repos land a PR only after its branch is current with the latest base, so a merge never ships a head
+    # whose review + CI predated an advance of the base. The decision is POSITIVE: merge only when GitHub
+    # reports the branch is NOT behind its base (mergeStateStatus != "BEHIND"), never merely because an
+    # update call did not error. If it is BEHIND, update the branch (merge commit, never force) and leave
+    # the PR whatever the update's outcome -- a BEHIND branch must never land on a stale review/CI, so a
+    # failed update defers rather than merges; the next run re-reviews and re-checks CI at the updated
+    # head. An unknown/uncomputed state also defers, because it cannot confirm the branch is current.
+    behind = behind_base_note(root, nwo, slug, number, f"daily PR #{number}")
+    if behind:
+        return behind
+    try:
+        gh(root, "pr", "merge", str(number), "--squash", "--match-head-commit", head)
+    except RoutineError as exc:
+        return f"daily PR #{number}: left open (merge refused, head may have moved: {str(exc)[:120]})"
+    # under a merge queue a successful `gh pr merge` only enqueues the PR; run_repo must not push to the
+    # queued docs/maintain branch meanwhile (the upgrade PR's rule, applied to the daily PR)
+    state = state_after_merge(root, number)
+    if state != "MERGED":
+        return f"daily PR #{number}: queued to merge at {head[:10]} (state {state or 'unknown'}); holding until it lands"
+    return f"daily PR #{number}: merged (clean review + green CI at {head[:10]})"
 
 
 # ------------------------------------------------------------------ maintain (inside a worktree)
@@ -376,6 +654,12 @@ class Maintain:
         # scratch never lands in a commit, whatever the repo's .gitignore says
         git(self.root, "add", "-A", "--", *(paths or ["."]))
         git(self.root, "reset", "-q", "--", ".docs-cache", check=False)
+        # .beads/ is never swept in by the catch-all: a live Beads db rewrites .beads/issues.jsonl on
+        # any bd call, so a maintain run that touched Beads for its own reasons must not commit that
+        # drift. The roadmap plugin's Beads export is the one maintain writer of .beads/, and it names
+        # its path explicitly (phase_plugins), so the guard only drops .beads/ the caller did not ask for.
+        if not any(p == ".beads" or p.startswith(".beads/") for p in (paths or [])):
+            git(self.root, "reset", "-q", "--", ".beads", check=False)
         # a link to a path outside the repo (the private state dir) never lands in a commit
         for rel in escaping_symlinks(self.root):
             git(self.root, "reset", "-q", "--", rel, check=False)
@@ -389,7 +673,7 @@ class Maintain:
     def note_suppressed(self, c: dict) -> bool:
         r = suppressed(c, self.rejected, self.now)
         if r:
-            self.notes.append(f"Held back a change {approver(self.cfg)} rejected on PR #{r['pr']} ({r['reason']}): {c['path']}.")
+            self.notes.append(f"Held back a change rejected on PR #{r['pr']} ({r['reason']}): {c['path']}.")
             return True
         return False
 
@@ -407,7 +691,12 @@ class Maintain:
         for r in rows:
             self.changes.append({"op": "sweep", "path": r["path"], "input": r["input"]})
         if not config.is_public(self.cfg):
-            self.commit(f"docs(maintain): archive {len(rows)} finished records")
+            # stage exactly what the sweep touched: each record's new path (its deletion at the old
+            # path is already staged by `git mv`, or was untracked), plus this run's ledger dir. Never
+            # the whole working tree. The old path is left out because a pathspec matching nothing on
+            # disk errors ("did not match any files").
+            moved = [r["dest"] for r in rows] + [self.run_dir]
+            self.commit(f"docs(maintain): archive {len(rows)} finished records", moved)
 
     # -- phase 2: drift re-derive + claim checks within budget + receipt ages
     def worklist(self) -> List[Tuple[str, str]]:
@@ -478,6 +767,7 @@ class Maintain:
     # -- phase 3: roadmap plugin status + Beads export
     def phase_plugins(self) -> List[str]:
         lines: List[str] = []
+        written: List[str] = []
         for plug in self.plugins:
             fn = getattr(plug, "maintain", None)
             if fn is None:
@@ -486,7 +776,11 @@ class Maintain:
                 if self.note_suppressed(c):
                     continue
                 self.changes.append(c)
-        self.commit("docs(maintain): roadmap status and Beads export")
+                written.append(c["path"])
+        # stage exactly the paths the plugins wrote (ROADMAP.md and, named explicitly so the commit
+        # guard keeps it, .beads/issues.jsonl); nothing to commit when no plugin wrote anything
+        if written:
+            self.commit("docs(maintain): roadmap status and Beads export", written)
         return lines
 
     # -- phase 4: unclosed issue intents (contract section 2 step 4)
@@ -511,10 +805,17 @@ class Maintain:
 
     # -- phase 5: generators LAST
     def phase_generate(self) -> None:
-        _, changed = generate.run(self.root, self.cfg, check=True)
-        if not changed:
+        # A generator pointed at a hand-written file (no manage-docs:generated marker) refuses rather
+        # than clobber it. In the daily run that is a note for the operator to set docs.json, never a
+        # crash and never a silent overwrite; the next run regenerates once the config is fixed.
+        try:
+            _, changed = generate.run(self.root, self.cfg, check=True)
+            if not changed:
+                return
+            generate.run(self.root, self.cfg)
+        except generate.GenerateError as exc:
+            self.notes.append(str(exc))
             return
-        generate.run(self.root, self.cfg)
         for fp in generate.fingerprints(self.root, self.cfg, changed):
             if self.note_suppressed(fp):
                 if git(self.root, "ls-files", "--error-unmatch", fp["path"], check=False).returncode == 0:
@@ -522,10 +823,20 @@ class Maintain:
                 else:
                     (self.root / fp["path"]).unlink()
                 continue
-            fp["label"] = {"docs/README.md": "the docs map", "work/README.md": "the records index"}.get(
+            fp["label"] = {config.docs_map_path(self.cfg): "the docs map",
+                           "work/README.md": "the records index"}.get(
                 fp["path"], f"the generated file {fp['path']}")
             self.changes.append(fp)
         self.commit("docs(maintain): regenerate generated docs")
+
+    # -- phase 6: repo-wide warnings into the daily PR body (X12)
+    def phase_warnings(self) -> None:
+        """Surface the repo-wide signals (broken links anywhere, existing misplaced files, entry-point
+        staleness and dead path references) as notes in the daily PR. WARN-only: they report, they
+        never fail a PR and never block the run. No commit; notes ride along the daily PR body."""
+        ctx = checks.Ctx(self.root, self.cfg, scope="all")
+        for r in checks.daily_warnings(ctx):
+            self.notes.append(f"{r['path']}: {r['message']}")
 
     def write_rejection_record(self, rows: List[dict]) -> None:
         if not rows:
@@ -539,7 +850,7 @@ class Maintain:
         if not rj.exists():
             rj.write_text(json.dumps({"status": "done", "pr": None}) + "\n", encoding="utf-8")
         if not config.is_public(self.cfg):
-            self.commit("docs(maintain): record the rejected daily PR")
+            self.commit("docs(maintain): record the rejected daily PR", [self.run_dir])
 
     def run_phases(self, rejected_rows: List[dict]) -> None:
         self.write_rejection_record(rejected_rows)
@@ -548,6 +859,7 @@ class Maintain:
         self.phase_plugins()
         self.phase_intents()
         self.phase_generate()
+        self.phase_warnings()
 
 
 def roadmap_lines(plugins, root: Path, changes: List[dict]) -> List[str]:
@@ -559,9 +871,93 @@ def roadmap_lines(plugins, root: Path, changes: List[dict]) -> List[str]:
     return lines
 
 
+def open_upgrade_pr(root: Path) -> Optional[dict]:
+    """The repo's own open docs/upgrade-<sha> PR (never a fork's), or None."""
+    # the branch name carries a sha, so --head cannot select it; list past gh's default 30 so an upgrade PR
+    # behind other open PRs is never missed (and never duplicated by the PIN-behind path; Codex P2, #1117)
+    prs = gh_json(root, "pr", "list", "--state", "open", "--limit", "1000", "--json",
+                  "number,headRefName,headRefOid,baseRefName,isCrossRepository,url") or []
+    own = [p for p in prs if not p.get("isCrossRepository")
+           and checks.UPGRADE_BRANCH.match(p.get("headRefName") or "")]
+    return own[0] if own else None
+
+
+def try_merge_upgrade_pr(root: Path, entry: dict, clone_root: Path, pr: dict) -> str:
+    """Merge an open upgrade PR ONLY on a clean independent review at its CURRENT head plus green required
+    CI, pinned with --match-head-commit: the daily PR's gate. Never --auto, never on the
+    routine's own judgement. Unlike the daily PR, findings never close it: an engine upgrade is left open
+    for a human whatever the verdict. Returns a one-line outcome; "merged (" only when it landed."""
+    number, head = pr["number"], pr.get("headRefOid") or ""
+    label = f"upgrade PR #{number}"
+    want_base = entry.get("base_branch", "main")
+    if pr.get("baseRefName") != want_base:
+        return f"{label}: left untouched (PR base is {pr.get('baseRefName')!r}, not {want_base!r})"
+    cmd = merge_gate_cmd(entry["slug"], clone_root)
+    if not cmd:
+        return f"{label}: left open (no merge gate; a reviewer or the lead merges)"
+    if not head:
+        return f"{label}: left open (could not read the PR head)"
+    nwo = _nwo_from_url(pr.get("url"))
+    repo_args = ["--repo", nwo] if nwo else []
+    try:
+        gate = subprocess.run([*cmd, *repo_args, "--pr", str(number), "--head", head], cwd=clone_root,
+                              capture_output=True, text=True)
+    except OSError as exc:
+        return f"{label}: left open (merge gate failed to run: {exc})"
+    if gate.returncode != 0:
+        if gate.returncode == 2 and nwo and codex_capped_at_head(root, nwo, number, head):
+            return f"{label}: left open (review capped; a fallback reviewer is a lead action)"
+        verdict = {1: "open findings", 2: "not reviewed at head", 3: "review state unknown"}.get(
+            gate.returncode, f"gate exit {gate.returncode}")
+        return f"{label}: left open (review not clean at head: {verdict})"
+    if not ci_green(root, number):
+        return f"{label}: left open (required CI not green at head)"
+    behind = behind_base_note(root, nwo, entry["slug"], number, label)
+    if behind:
+        return behind
+    try:
+        gh(root, "pr", "merge", str(number), "--squash", "--match-head-commit", head)
+    except RoutineError as exc:
+        return f"{label}: left open (merge refused, head may have moved: {str(exc)[:120]})"
+    # under a merge queue a successful `gh pr merge` only enqueues the PR; maintenance must keep waiting
+    # until GitHub reports it MERGED, or it would run on the old vendored engine (Codex P2, #1117)
+    state = state_after_merge(root, number)
+    if state != "MERGED":
+        return f"{label}: queued to merge at {head[:10]} (state {state or 'unknown'}); holding until it lands"
+    return f"{label}: merged (clean review + green CI at {head[:10]})"
+
+
+def upgrade_review_state(slug: str) -> Path:
+    return state_dir(slug) / "upgrade-pr.json"
+
+
+def ensure_upgrade_review(root: Path, slug: str, pr: dict, renv: Dict[str, str]) -> str:
+    """Ask for the ledgered review whenever the upgrade PR's head is not the head a review was last
+    successfully requested on: a new PR, pushed fixes, a behind_base_note update, or a failed earlier
+    request. Without this a moved head stays unreviewed and the repo's maintenance waits forever (Codex
+    P1, #1117). The requested head advances only when request_review actually posted."""
+    number, head = pr["number"], pr.get("headRefOid") or ""
+    sp = upgrade_review_state(slug)
+    prior = json.loads(sp.read_text(encoding="utf-8")) if sp.exists() else {}
+    if not head or (prior.get("number") == number and prior.get("review_requested_head") == head):
+        return ""
+    if not request_review(root, number, env=renv):
+        return "; review not requested: no ledgered command"
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    sp.write_text(json.dumps({"number": number, "review_requested_head": head}, sort_keys=True) + "\n",
+                  encoding="utf-8")
+    return f"; review requested at {head[:10]}"
+
+
 def open_daily_pr(root: Path) -> Optional[dict]:
-    prs = gh_json(root, "pr", "list", "--state", "open", "--head", BRANCH, "--json", "number,headRefOid,body,url") or []
-    return prs[0] if prs else None
+    prs = gh_json(root, "pr", "list", "--state", "open", "--head", BRANCH, "--json",
+                  "number,headRefOid,baseRefName,isCrossRepository,body,url") or []
+    # `gh pr list --head` filters by branch NAME only (it does not accept owner:branch), so on a public
+    # repo a fork can open a PR whose head branch is also `docs/maintain`. Selecting the first match could
+    # let the routine gate, close, or auto-merge an unrelated fork PR. Consider ONLY the managed repo's
+    # own branch: a cross-repository (fork) head is never the daily PR.
+    own = [p for p in prs if not p.get("isCrossRepository")]
+    return own[0] if own else None
 
 
 def prepare_branch(root: Path, base: str) -> Optional[dict]:
@@ -601,7 +997,8 @@ def maintain_here(root: Path, cfg: dict, slug: str, runtime: str, plugins=(), ve
         if c["op"] == "receipt" and "title" not in c:
             c["title"] = doc_title(root, c["path"])
         if c["op"] == "generate" and "label" not in c:
-            c["label"] = {"docs/README.md": "the docs map", "work/README.md": "the records index"}.get(
+            c["label"] = {config.docs_map_path(cfg): "the docs map",
+                          "work/README.md": "the records index"}.get(
                 c["path"], f"the generated file {c['path']}")
     if not m.changes and pr is None and ahead == 0:
         print(f"maintain {slug}: nothing to change" + ("".join(f"\n  note: {n}" for n in m.notes)))
@@ -621,8 +1018,17 @@ def maintain_here(root: Path, cfg: dict, slug: str, runtime: str, plugins=(), ve
     if not push:
         print(body)
         return 0
+    ensure_label(root)
+    local_head = git(root, "rev-parse", "HEAD").stdout.strip()
+    sp = state_dir(slug) / "open-pr.json"
+    prior = json.loads(sp.read_text(encoding="utf-8")) if sp.exists() else {}
+    prior_requested = prior.get("review_requested_head")  # the head a review was last requested on, if any
     if pr is not None:
-        if ahead:
+        # The head MOVED this run only when local HEAD differs from the PR's remote head. `ahead`
+        # (origin/base..HEAD) stays positive for an unchanged PR because it still holds its original
+        # commits, so it must NOT drive the push decision: that would re-push an unchanged branch.
+        remote_head = git(root, "rev-parse", f"origin/{BRANCH}", check=False).stdout.strip()
+        if local_head != remote_head:
             git(root, "push", "-q", "origin", f"HEAD:refs/heads/{BRANCH}")
         gh(root, "pr", "edit", str(pr["number"]), "--body", body, "--add-label", LABEL)
         number = pr["number"]
@@ -639,9 +1045,23 @@ def maintain_here(root: Path, cfg: dict, slug: str, runtime: str, plugins=(), ve
         mnum = re.search(r"/pull/(\d+)", out)
         number = int(mnum.group(1)) if mnum else None
         print(f"maintain {slug}: opened daily PR {out.strip()}")
-    (state_dir(slug) / "open-pr.json").write_text(json.dumps(
-        {"number": number, "changes": [{k: c[k] for k in ("op", "path", "input")} for c in all_changes]},
-        indent=1, sort_keys=True) + "\n", encoding="utf-8")
+
+    def save_state(requested_head):
+        sp.write_text(json.dumps(
+            {"number": number, "changes": [{k: c[k] for k in ("op", "path", "input")} for c in all_changes],
+             "review_requested_head": requested_head}, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+
+    # Persist the PR + its changes FIRST, keeping the prior requested-head, so the state file always
+    # reflects an existing PR even if the review request below fails. A review is (re)requested whenever
+    # the reviewable head differs from the head a review was last SUCCESSFULLY requested on: a new PR
+    # (prior None), a moved head, or a prior run whose request raised before it recorded success. Advance
+    # the requested head ONLY when request_review actually posted (returns True); a skipped request (no
+    # command, e.g. a manual run) or a raised one leaves the head pending so a later run with the ledgered
+    # command retries, instead of marking the head reviewed when no review was ever asked for.
+    save_state(prior_requested)
+    if number is not None and prior_requested != local_head:
+        if request_review(root, number):
+            save_state(local_head)
     return 0
 
 
@@ -649,6 +1069,38 @@ def maintain_here(root: Path, cfg: dict, slug: str, runtime: str, plugins=(), ve
 
 def worktree_for(entry: dict) -> Path:
     return data_home() / "worktrees" / entry["slug"]
+
+
+def _abs_cmd(cmd: list, clone_root: Path) -> list:
+    """Resolve a relative `.py` script element against the home clone, so a command vendored in the home
+    repo (e.g. the ledgered comment helper) runs even with cwd set to another repo's worktree."""
+    out = []
+    for a in cmd:
+        if isinstance(a, str) and a.endswith(".py") and not os.path.isabs(a):
+            out.append(str((Path(clone_root) / a).resolve()))
+        else:
+            out.append(a)
+    return out
+
+
+def review_env(slug: str, clone_root: Path) -> Dict[str, str]:
+    """The review-request env the routine hands the vendored maintain_here: the comment text and the
+    LEDGERED comment command. The command is resolved from site.json for EVERY enrolled repo (top-level
+    `review_request`, optionally overridden per seed), never only for one, so no repo takes an unledgered
+    path; its script path is made absolute against the home clone. `MANAGE_DOCS_REVIEW_CMD` already in the
+    environment wins (an override / test seam). This runs only from the home clone, where site.json
+    exists. A repo with no command configured anywhere gets the comment text only, and maintain_here then
+    skips the request rather than post it unledgered."""
+    rr = dict(site.get("review_request") or {})
+    seed = (site.get("seeds") or {}).get(slug) or {}
+    rr.update(seed.get("review_request") or {})
+    out = {"MANAGE_DOCS_REVIEW_COMMENT": str(rr.get("comment") or REVIEW_COMMENT)}
+    env_cmd = os.environ.get("MANAGE_DOCS_REVIEW_CMD")
+    if env_cmd:
+        out["MANAGE_DOCS_REVIEW_CMD"] = env_cmd
+    elif rr.get("command"):
+        out["MANAGE_DOCS_REVIEW_CMD"] = json.dumps(_abs_cmd(rr["command"], clone_root))
+    return out
 
 
 def link_private_state(wt: Path, slug: str) -> None:
@@ -733,7 +1185,51 @@ def run_repo(entry: dict, runtime: str, clone_root: Path, band: str, docs_py: Pa
     reason = skip_reason(entry)
     if reason:
         return f"skipped {reason}", False
-    if band == "small" and open_daily_pr(path) is None:
+    # An open engine upgrade PR goes through the daily PR's gate (clean review + green CI at head, never
+    # --auto). Until it lands, the repo's maintenance waits: the next maintenance should run the new engine.
+    renv = review_env(slug, clone_root)
+    upr = open_upgrade_pr(path)
+    if upr is not None:
+        try:
+            unote = try_merge_upgrade_pr(path, entry, clone_root, upr)
+        except RoutineError as exc:
+            unote = f"upgrade PR #{upr['number']}: merge check errored ({str(exc)[:120]})"
+        if "merged (" not in unote and upr.get("baseRefName") == base:
+            # a PR retargeted off the configured base is left entirely alone: no review request either
+            # (the daily-PR safeguard; Codex P2, #1117). Re-read the head: behind_base_note may have
+            # just updated the branch
+            live = (gh_json(path, "pr", "view", str(upr["number"]), "--json", "headRefOid") or {})
+            try:
+                unote += ensure_upgrade_review(path, slug, dict(upr, **{k: v for k, v in live.items() if v}),
+                                               renv)
+            except RoutineError as exc:
+                unote += f"; review request failed ({str(exc)[:100]})"
+        print(f"maintain {slug}: {unote}")
+        if "merged (" not in unote:
+            return f"skipped ({unote}; maintenance waits for it)", False
+        git(path, "fetch", "-q", "origin", base)
+    # At the start of the run, merge yesterday's daily PR if (and only if) its review is clean at head
+    # and required CI is green; otherwise leave it. This is cheap (no model, no worktree), so it runs
+    # before the quota band gate.
+    try:
+        note = try_merge_daily_pr(path, entry, clone_root)
+    except RoutineError as exc:
+        note = f"daily PR: merge check errored ({str(exc)[:120]})"
+    if note:
+        print(f"maintain {slug}: {note}")
+        if "merged (" in note:
+            git(path, "fetch", "-q", "origin", base)  # pick up the merge so the worktree is cut post-merge
+        elif "holding until it lands" in note:
+            return f"skipped ({note}; maintenance waits for it)", False
+    # A daily PR retargeted away from the configured base must be left ENTIRELY alone, not just unmerged:
+    # try_merge above refuses to gate/close/merge it, but maintain_here would still select it by its
+    # docs/maintain head and push commits, edit its body, and re-request review on the wrong base. Skip
+    # the whole repo for this run and leave the PR for a human (same class as the merge-path base guard).
+    daily = open_daily_pr(path)
+    if daily is not None and daily.get("baseRefName") not in (None, base):
+        return (f"skipped (daily PR #{daily['number']} targets {daily.get('baseRefName')!r}, not "
+                f"{base!r}; left untouched for a human)", False)
+    if band == "small" and daily is None:
         return "skipped quota above 70% (no open daily PR to refresh)", False
     wt = worktree_for(entry)
     if wt.exists():
@@ -747,10 +1243,26 @@ def run_repo(entry: dict, runtime: str, clone_root: Path, band: str, docs_py: Pa
             link_private_state(wt, slug)
         sha = pin_behind(wt, clone_root)
         if sha:
-            up = subprocess.run([sys.executable, str(docs_py), "upgrade", "--repo", str(wt)], capture_output=True,
+            # Open the upgrade PR (never --auto), ask for the ledgered independent review, and hold this
+            # repo's maintenance until a later run lands it through try_merge_upgrade_pr.
+            # --repo is a top-level option: it goes before the subcommand (`upgrade --repo` was a usage error,
+            # so the old auto-upgrade never ran)
+            up = subprocess.run([sys.executable, str(docs_py), "--repo", str(wt), "upgrade"], capture_output=True,
                                 text=True)
             print(up.stdout + up.stderr)
-        env = dict(os.environ, MANAGE_DOCS_ROUTINE="1", MANAGE_DOCS_RUNTIME=runtime)
+            if up.returncode != 0:
+                return f"error (upgrade exit {up.returncode})", False
+            m = re.search(r"upgrade PR \S*/pull/(\d+)", up.stdout)
+            if m:
+                number = int(m.group(1))
+                pr = {"number": number, "headRefOid": git(wt, "rev-parse", "HEAD").stdout.strip()}
+                try:
+                    asked = ensure_upgrade_review(path, slug, pr, renv)
+                except RoutineError as exc:
+                    # the requested head is not recorded, so the next run asks again
+                    return f"upgrade PR #{number} opened; review request failed ({str(exc)[:120]})", False
+                return f"upgrade PR #{number} opened{asked}; maintenance waits for it", True
+        env = dict(os.environ, MANAGE_DOCS_ROUTINE="1", MANAGE_DOCS_RUNTIME=runtime, **renv)
         vend = wt / "tools" / "docs" / "docs.py"
         argv = [sys.executable, str(vend), "maintain", "--here", "--slug", slug]
         if band == "small":
@@ -810,8 +1322,18 @@ ROUTINE_PROMPT = """Run the manage-docs daily routine on this machine (manage-do
 1. cd {clone} && git fetch -q origin {base} && git checkout -q --detach origin/{base}
 2. MANAGE_DOCS_RUNTIME={runtime} python3 {skill_dir}/docs.py maintain
 3. Report the output in one short message. Exit 5 means another run holds the lock or quota is above
-   90%: if quota, schedule the next run after the printed resets_at. Never approve a migration map,
-   never merge a daily PR, never post anywhere; {owner} approves daily PRs.
+   90%: if quota, schedule the next run after the printed resets_at.
+
+This run: for each repo it first merges yesterday's daily docs PR ONLY when an
+independent review is clean at the PR's current head AND required CI is green there, pinned to that
+head (`--match-head-commit`); any miss leaves the PR for a reviewer or the lead. It then opens or
+updates today's daily docs PR and requests a review on it (the ledgered `@codex review`). When a repo's
+vendored tools are behind, it opens that repo's upgrade PR (docs/upgrade-<sha>, never auto-merged),
+requests the same ledgered review on it, merges it only through the same gate, and holds that repo's
+maintenance until it lands. It NEVER merges on its own judgement (only on a
+clean review at head plus green CI), NEVER approves a migration map, and NEVER posts anywhere except
+the ledgered review request on the repo's own daily PR or its own upgrade PR. A fallback reviewer,
+when Codex is capped, is a lead action, not this routine's.
 """
 
 
@@ -819,6 +1341,6 @@ SKILL_DIR = "/".join((".claude", "skills", "manage-docs"))  # the canonical skil
 
 
 def routine_prompt(runtime: str) -> str:
-    return ROUTINE_PROMPT.format(runtime=runtime, skill_dir=SKILL_DIR, owner=site.get("owner"),
+    return ROUTINE_PROMPT.format(runtime=runtime, skill_dir=SKILL_DIR,
                                  base=site.get("home_base_branch"),
                                  clone="~/.local/share/manage-docs/" + site.get("home_clone_dir"))

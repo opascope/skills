@@ -25,7 +25,19 @@ from docslib import config, frontmatter, globs, receipts
 from docslib._engine import engine
 
 GUARDED = [".github/workflows/docs-verify.yml", "tools/docs/"]
-GUARD_BRANCHES = re.compile(r"^docs/(bootstrap|upgrade-[0-9a-f]{7,40})$")
+_UPGRADE = r"upgrade-[0-9a-f]{7,40}"
+UPGRADE_BRANCH = re.compile(rf"^docs/{_UPGRADE}$")  # the vendored-tools upgrade PR's branch (routine too)
+GUARD_BRANCHES = re.compile(rf"^docs/(bootstrap|{_UPGRADE})$")
+# A promotion PR (working -> staging -> main) carries commits that already merged into
+# working, where a tools/docs change was guarded when it entered through a docs/upgrade PR.
+# docs-verify diffs the promotion PR against its base (staging or main), so that upgrade's
+# files reappear in the diff and the guard would fire again. Exempt a promote/* head whose
+# base is a promotion target; the guard still fires for every other branch.
+# Both are matched with fullmatch, not match: `match` plus a trailing `$` would also accept a
+# trailing newline (e.g. "main\n"), and a branch ref is a single line. PROMOTE_HEAD stays a
+# prefix matcher through the trailing `.*`, which (without DOTALL) rejects a newline-injected ref.
+PROMOTE_HEAD = re.compile(r"(refs/heads/)?promote/.*")
+PROMOTION_BASES = re.compile(r"(refs/heads/|origin/)?(staging|main)")
 DATED_HEADING = re.compile(r"^## \d{4}-\d{2}-\d{2} \S", re.M)
 DONE_STATUS = re.compile(r"^status:\s*done\s*$", re.M)
 
@@ -45,10 +57,13 @@ class Ctx:
     """What every check sees: the repo, its config, the change set and two text readers."""
 
     def __init__(self, root: Path, cfg: dict, scope: str = "all", base: Optional[str] = None,
-                 head_ref: Optional[str] = None, local: bool = False):
+                 head_ref: Optional[str] = None, local: bool = False, base_ref: Optional[str] = None):
         self.root = Path(root)
         self.cfg = cfg
         self.scope = scope
+        # The PR base BRANCH NAME (e.g. staging, main), for the path guard's promotion
+        # exemption. Distinct from self.base, which is the merge-base SHA used for diffing.
+        self.base_ref = base_ref
         self.local = local
         self.head_ref = head_ref
         self.index = receipts.Index(self.root)
@@ -98,6 +113,33 @@ class Ctx:
         p = subprocess.run(["git", "show", f"{self.base}:{path}"], cwd=self.root, capture_output=True)
         return p.stdout.decode("utf-8", "replace") if p.returncode == 0 else None
 
+    def read_at(self, ref: str, path: str) -> Optional[str]:
+        """Text of `path` at an arbitrary git ref (None when absent there)."""
+        p = subprocess.run(["git", "show", f"{ref}:{path}"], cwd=self.root, capture_output=True)
+        return p.stdout.decode("utf-8", "replace") if p.returncode == 0 else None
+
+    def merge_parents(self) -> List[str]:
+        """Every parent SHA recorded in MERGE_HEAD for an in-progress merge; []
+        otherwise. MERGE_HEAD lists one SHA per merged-in branch, so an octopus
+        merge yields all of them.
+
+        During a merge commit read_before() sees only the first parent (HEAD),
+        so a doc that arrived WHOLE from a merged-in branch reads as growth it
+        did not author. A caller compares against these parents to tell merge
+        integration apart from growth written by the merge itself.
+        """
+        # --git-path resolves MERGE_HEAD inside the right gitdir for a worktree;
+        # self.root / <abs path> keeps the absolute path (pathlib), / <rel path>
+        # joins it. The file is absent when no merge is in progress.
+        rel = _git(self.root, "rev-parse", "--git-path", "MERGE_HEAD", check=False).strip()
+        if not rel:
+            return []
+        try:
+            text = (self.root / rel).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return []
+        return [line.strip() for line in text.splitlines() if line.strip()]
+
     # ---- change-set helpers
     def changed(self, statuses: str = "ACMRT") -> List[str]:
         return [p for st, p, _ in self.changes if st in statuses]
@@ -131,7 +173,7 @@ def live_docs_for_caps(ctx: Ctx, paths) -> List[str]:
     for p in paths:
         if not p.startswith("docs/") or p.startswith(("docs/roadmap/", "docs/generated/")):
             continue
-        if not config.is_doc(ctx.cfg, p) or p == "docs/README.md":
+        if not config.is_doc(ctx.cfg, p) or p in ("docs/README.md", config.docs_map_path(ctx.cfg)):
             continue
         out.append(p)
     return out
@@ -262,7 +304,7 @@ def check2_links(ctx: Ctx) -> List[dict]:
         for tgt in link_targets(text):
             if tgt in before:
                 continue
-            res = resolve_link(p, tgt)
+            res = resolve_link(config.link_base(p), tgt)
             if res is None or res.startswith(".."):
                 continue
             if config.is_public(ctx.cfg) and config.local_only(res):
@@ -358,6 +400,7 @@ def check5_caps(ctx: Ctx) -> List[dict]:
             elif not warn_old:
                 out.append(result(5, "docs/", f"doc count {len(after)} over cap {cap_docs}"))
     if cap_lines:
+        merge_parents = ctx.merge_parents() if ctx.scope != "all" else []
         for p in live_docs_for_caps(ctx, ctx.scoped_docs()):
             text = ctx.read(p)
             if text is None or receipts.is_generated(text):
@@ -368,6 +411,13 @@ def check5_caps(ctx: Ctx) -> List[dict]:
             before = ctx.read_before(p) if ctx.scope != "all" else None
             n0 = body_lines(before) if before is not None else 0
             new_overage = ctx.scope != "all" and n > n0
+            # On a merge commit read_before() sees only the first parent, so a doc
+            # that arrived whole from the merged-in branch reads as new growth. It
+            # is not: a file byte-identical to a merge parent's version was
+            # integrated, not authored here, so it must not escalate to a "new
+            # overage" failure (manage-docs merge-awareness).
+            if new_overage and merge_parents and any(ctx.read_at(mp, p) == text for mp in merge_parents):
+                new_overage = False
             if new_overage or not warn_old:
                 out.append(result(5, p, f"{n} lines over cap {cap_lines}" + (" (new overage)" if new_overage else "")))
             else:
@@ -421,6 +471,141 @@ def check8_local_only(ctx: Ctx) -> List[dict]:
             for p in paths if config.local_only(p)]
 
 
+_BACKTICK = re.compile(r"`([^`\n]+)`")
+_HAS_EXT = re.compile(r"\.[A-Za-z0-9]+$")
+_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+_TEMPLATE = re.compile(r"[{}<>]|YYYY")  # templated token: `{slug}`, `<route>`, `YYYY-MM-DD`
+# A whole-token git range: `a..b` / `a...b`, e.g. `origin/working...HEAD`. The right side forbids
+# `.` and `/` so a filename that merely contains `..` (e.g. `scripts/a..b.py`) is NOT treated as a
+# range. Parent paths (`../x`) never reach here: they have no leading ref and are caught downstream.
+_RANGE = re.compile(r"^[\w./@~^+-]+\.{2,3}[\w@~^+-]+$")
+
+
+def ignored_fn(ctx: Ctx) -> Callable[[str], bool]:
+    """A memoized `git check-ignore` lookup. A gitignored example path (e.g. `state/current.md`) is
+    judged by gitignore rules, NOT by whether it happens to sit on this machine's disk, so the verdict
+    is identical on every machine and checkout."""
+    cache: Dict[str, bool] = {}
+
+    def is_ignored(path: str) -> bool:
+        if path not in cache:
+            p = subprocess.run(["git", "check-ignore", "-q", "--", path], cwd=ctx.root,
+                               capture_output=True)
+            cache[path] = p.returncode == 0  # 0 ignored, 1 not ignored, 128 error
+        return cache[path]
+
+    return is_ignored
+
+
+def subfolder_fn(ctx: Ctx) -> Callable[[str], bool]:
+    """True when `path` is not a repo-root file but matches a tracked file deeper in the tree, i.e. it
+    resolves relative to some subfolder the doc is talking about (e.g. `crm/socket_listener.py` ->
+    `scripts/crm/socket_listener.py`). That is ambiguous, so it is treated as resolvable and skipped."""
+    tracked = ctx.tracked
+
+    def resolves_elsewhere(path: str) -> bool:
+        suffix = "/" + path
+        return any(tp.endswith(suffix) for tp in tracked)
+
+    return resolves_elsewhere
+
+
+def dead_path_refs(exists: Callable[[str], bool], text: str,
+                   is_ignored: Optional[Callable[[str], bool]] = None,
+                   resolves_elsewhere: Optional[Callable[[str], bool]] = None) -> List[str]:
+    """Backticked repo paths in `text` that resolve to nothing (X12). Conservative to avoid noise:
+    only single tokens with a slash and a file extension (so `scripts/gone.py`, not prose like
+    `and/or`), repo-root-relative, with URLs, globs and parent-escaping paths skipped. Also skipped,
+    because they are not confirmable dead repo paths: templated tokens (`{}`, `<>`, `YYYY`), `~/` home
+    paths, whole-token git ranges (`a..b`, `a...b`), gitignored paths (via `is_ignored`, so the verdict
+    is the same on every machine), and tokens that resolve relative to a tracked subfolder (via
+    `resolves_elsewhere`, ambiguous so skipped, UNLESS the token carries an explicit `./` root-relative
+    prefix, which is then judged dead at the root)."""
+    out: List[str] = []
+    for raw in _BACKTICK.findall(text):
+        tok = raw.strip()
+        if " " in tok or "*" in tok or "?" in tok or "/" not in tok:
+            continue
+        if _TEMPLATE.search(tok) or tok.startswith("~/") or _RANGE.match(tok):
+            continue
+        if _SCHEME.match(tok) or not _HAS_EXT.search(tok):
+            continue
+        t = tok[2:] if tok.startswith("./") else tok
+        t = t.split("#", 1)[0].split("?", 1)[0].lstrip("/")
+        if not t or ".." in t.split("/"):
+            continue
+        res = posixpath.normpath(t)
+        if exists(res):
+            continue
+        if is_ignored is not None and is_ignored(res):
+            continue
+        # The subfolder-suffix rescue is for ambiguous relative refs (`crm/x.py`). A leading `./`
+        # is an explicit repo-root-relative claim, so a deeper match must NOT rescue it: if `./x`
+        # is absent at the root, it is genuinely dead.
+        if resolves_elsewhere is not None and not tok.startswith("./") and resolves_elsewhere(res):
+            continue
+        if tok not in out:
+            out.append(tok)
+    return out
+
+
+def _last_commit_iso(root: Path, path: str) -> Optional[str]:
+    out = _git(root, "log", "-1", "--format=%cI", "--", path, check=False).strip()
+    return out or None
+
+
+def entrypoint_warnings(ctx: Ctx) -> List[dict]:
+    """Repo-wide, WARN-only staleness for entry-point docs, which carry no frontmatter and so are never
+    covered by receipt staleness (X12). Two frontmatter-free signals: a last commit older than
+    entrypoint_max_age_days, and a backticked repo path that no longer exists. Never on a PR
+    (scope != all), so it can never fail an unrelated change; stdlib-only and scoped to the entry-point
+    set, so it stays fast."""
+    if ctx.scope != "all":
+        return []
+    pats = ctx.cfg.get("entrypoints") or []
+    if not pats:
+        return []
+    max_age = int(ctx.cfg.get("entrypoint_max_age_days") or 0)
+    exists = exists_fn(ctx)
+    is_ignored = ignored_fn(ctx)
+    resolves_elsewhere = subfolder_fn(ctx)
+    now = dt.datetime.now(dt.timezone.utc)
+    out: List[dict] = []
+    for p in sorted(ctx.tracked):
+        if not config.is_entrypoint(ctx.cfg, p) or (ctx.root / p).is_symlink():
+            continue
+        text = ctx.read(p)
+        if text is None:
+            continue
+        for tok in dead_path_refs(exists, text, is_ignored, resolves_elsewhere):
+            out.append(result("entrypoint", p, f"dead path reference: `{tok}` does not exist", "warn"))
+        if max_age > 0:
+            iso = _last_commit_iso(ctx.root, p)
+            if not iso:
+                continue
+            try:
+                age = (now - dt.datetime.fromisoformat(iso)).days
+            except ValueError:
+                continue
+            if age > max_age:
+                out.append(result("entrypoint", p, f"entry-point doc may be stale: last commit "
+                                                   f"{age} days ago (max {max_age})", "warn"))
+    return out
+
+
+def daily_warnings(ctx: Ctx) -> List[dict]:
+    """The repo-wide signals the daily maintain run surfaces in the daily PR body (X12): existing
+    misplaced files (check 1), broken links anywhere including unchanged files (check 2), and
+    entry-point staleness and dead path references. All WARN; empty off a repo-wide (all) scope, so
+    they never fail a PR. The daily PR reports them; a PR is failed only by the diff-scoped checks."""
+    if ctx.scope != "all":
+        return []
+    out = [dict(r, level="warn") for r in check1_placement(ctx)]
+    out += [dict(r, level="warn") for r in check2_links(ctx)]
+    out += entrypoint_warnings(ctx)
+    return out
+
+
 def drift_annotations(ctx: Ctx) -> List[dict]:
     """R7: covered paths changed without the doc; or a verified doc's body changed. Warn only."""
     if ctx.scope == "all":
@@ -455,6 +640,13 @@ def path_guard(ctx: Ctx) -> List[dict]:
         return []
     ref = ctx.head_ref or os.environ.get("GITHUB_HEAD_REF") or ""
     if GUARD_BRANCHES.match(ref):
+        return []
+    # A promotion PR re-presents an already-guarded tools/docs change because it diffs
+    # against staging or main, not working. Exempt promote/* -> {staging, main}; the base
+    # branch name comes from --base-ref or, in CI, $GITHUB_BASE_REF (Actions sets it on a
+    # pull_request_target like docs-verify).
+    base_branch = ctx.base_ref or os.environ.get("GITHUB_BASE_REF") or ""
+    if PROMOTE_HEAD.fullmatch(ref) and PROMOTION_BASES.fullmatch(base_branch):
         return []
     out = []
     for st, p, old in ctx.changes:
@@ -520,8 +712,8 @@ def local_receipts(ctx: Ctx) -> List[dict]:
 
 
 DOCS_CHECKS = [check1_placement, check2_links, check3_frontmatter, check4_generated, check5_caps,
-               check6_done_records, check7_loosening, check8_local_only, drift_annotations, path_guard,
-               check_pin]
+               check6_done_records, check7_loosening, check8_local_only, entrypoint_warnings,
+               drift_annotations, path_guard, check_pin]
 
 
 def run(ctx: Ctx, plugins=()) -> List[dict]:

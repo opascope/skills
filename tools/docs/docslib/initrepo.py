@@ -34,7 +34,7 @@ WORKFLOW_SRC = "templates/workflows/docs-verify.yml"
 WORKFLOW_DST = ".github/workflows/docs-verify.yml"
 GITHOOKS = ["pre-commit", "commit-msg", "pre-push"]
 ROUTER_OPEN, ROUTER_CLOSE = "<!-- manage-docs:router -->", "<!-- /manage-docs:router -->"
-ROUTER_FRAGMENT = "docs/agent/_docs-router.md"
+ROUTER_FRAGMENT = config.ROUTER_FRAGMENT
 RULESET_NAME = "manage-docs verify"
 ACTIONS_APP_ID = 15368  # GitHub Actions integration (S1 probe): pins the required check to Actions
 REQUIRED_CHECK = "docs-verify"
@@ -161,6 +161,47 @@ UPDATE_BEFORE_MERGE = set(site.get("update_before_merge"))
 SEED_ALIASES = dict(site.get("seed_aliases"))
 
 
+def slug_paths(slug: str) -> Dict[str, Path]:
+    """Every machine-local path the routine keys by a repo's slug (routine.py: state_dir, private_dir,
+    worktree_for, and the active-migration marker skip_reason reads), plus the engine's publish, close and
+    rollback journals (migrate.journal; Codex P2 on #1124). The worktree comes first, so a refused
+    `git worktree move` leaves every other path where it was."""
+    return {"worktree": routine.data_home() / "worktrees" / slug,
+            "state": routine.data_home() / "state" / slug,
+            "private": routine.data_home() / "private" / slug,
+            "active marker": routine.config_home() / "active" / slug,
+            "journals": routine.config_home() / slug}
+
+
+def move_slug_paths(olds: List[str], new: str, checkout: str, done: List[str]) -> None:
+    """Carry a renamed enrollment's local paths to its new slug: moves only, never a merge or a delete.
+    Every path is checked first: when a legacy slug's path and the new slug's path both exist, or two legacy
+    slugs would land on one path, it refuses before anything moves or repos.json changes (Codex P2s on
+    #1118)."""
+    dst, moves, clash = slug_paths(new), [], []
+    for kind, target in dst.items():
+        srcs = [slug_paths(o)[kind] for o in olds if os.path.lexists(slug_paths(o)[kind])]
+        if srcs and os.path.lexists(target):
+            clash.append(f"{kind}: {', '.join(map(str, srcs))} and {target}")
+        elif len(srcs) > 1:
+            clash.append(f"{kind}: {', '.join(map(str, srcs))} would all move to {target}")
+        elif srcs:
+            moves.append((kind, srcs[0], target))
+    if clash:
+        raise InitError("both the legacy and the new slug's local paths exist; reconcile them by hand (nothing "
+                        "was moved or merged, repos.json is unchanged):\n  " + "\n  ".join(clash))
+    for kind, src, target in moves:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if kind == "worktree":
+            p = sh(["git", "worktree", "move", str(src), str(target)], cwd=checkout, check=False)
+            if p.returncode != 0:
+                raise InitError(f"git worktree move {src} {target} failed ({p.stderr.strip()[:200]}); "
+                                "nothing else was moved and repos.json is unchanged")
+        else:
+            src.rename(target)
+        done.append(f"{kind} moved: {src} -> {target}")
+
+
 def repo_slug(repo: Path) -> str:
     n = nwo(repo)
     if n in SEED_ALIASES:
@@ -218,7 +259,7 @@ def preflight(repo: Path, cfg: dict, runtime: str, reviewer: Optional[List[str]]
     lines: List[str] = []
     go = True
     name = nwo(repo)
-    slug = name.split("/")[-1] if name else repo.name
+    slug = repo_slug(repo)  # the seed slug, so an aliased repo reads its own site.json settings
     # before PR 1 there is no docs.json and cfg holds defaults; the base comes from the seed or GitHub
     base = cfg.get("base_branch", "main") if (repo / "docs.json").is_file() else unseeded_base(repo)
 
@@ -342,8 +383,9 @@ def stage_pr1(skill_root: Path, repo: Path, tier: Optional[str], decision: Optio
 
 
 def router_text(cfg: dict, repo: Optional[Path] = None) -> str:
+    docs_map = config.docs_map_path(cfg)
     lines = ["## Docs and records", "",
-             "- Docs map: [docs/README.md](docs/README.md), one line per doc with its receipt status."]
+             f"- Docs map: [{docs_map}]({docs_map}), one line per doc with its receipt status."]
     if not config.is_public(cfg):
         if repo is None or (Path(repo) / "docs" / "roadmap").is_dir():
             lines.append("- Roadmap and decisions: [docs/roadmap/](docs/roadmap/).")
@@ -455,8 +497,11 @@ def stage_migration(skill_root: Path, repo: Path, plugins=()) -> List[str]:
     done += [d for d in [install_router(repo, cfg, deferred)] if d]
     done += install_githooks(skill_root, repo, cfg, deferred)
     done += [d for d in [install_placement_hook(repo, deferred)] if d]
-    generate.run(repo, cfg, builtin_only=True)
-    done.append("docs/README.md" + ("" if config.is_public(cfg) else " and work/README.md") + " generated")
+    try:
+        generate.run(repo, cfg, builtin_only=True)
+    except generate.GenerateError as exc:
+        raise InitError(str(exc))
+    done.append(config.docs_map_path(cfg) + ("" if config.is_public(cfg) else " and work/README.md") + " generated")
     if deferred:
         done.append("deferred to `docs.py init --stage wire` in a small PR after the migration PR merges "
                     "(the migration PR must leave tracked files byte-identical): " + "; ".join(deferred))
@@ -492,6 +537,12 @@ def main_checkout(repo: Path) -> Path:
     common = Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
     if common is not None and common.name == ".git":
         return common.parent.resolve()
+    if common is not None:
+        # a submodule (or a linked worktree of one): the shared .git/modules/<name> names its main checkout in
+        # core.worktree; the same rule as the engine's main_checkout (Codex P2 PRRT_kwDOSy0wdc6pEMov)
+        w = sh(["git", "config", "--file", str(common / "config"), "core.worktree"], cwd=repo, check=False)
+        if w.returncode == 0 and w.stdout.strip():
+            return (common / w.stdout.strip()).resolve()
     return Path(repo).resolve()
 
 
@@ -506,11 +557,9 @@ def active_default_hooks(repo: Path) -> List[str]:
 
 
 def label_description(cfg: dict) -> str:
-    """The approval label's description; a public repo never names the owner (no personal names in public)."""
-    owner = site.get("owner")
-    if config.is_public(cfg) or not owner:
-        return "manage-docs daily PR awaiting the owner's approval"
-    return f"manage-docs daily PR awaiting {owner}'s approval"
+    """The marker on the one daily docs PR. It is review-gated like any agent PR, not
+    owner-gated, so the description names no person and makes no approval claim."""
+    return "manage-docs daily docs maintenance PR"
 
 
 def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None) -> Tuple[bool, List[str]]:
@@ -572,9 +621,29 @@ def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None)
     reposj = routine.config_home() / "repos.json"
     reposj.parent.mkdir(parents=True, exist_ok=True)
     entries = json.loads(reposj.read_text(encoding="utf-8")) if reposj.exists() else []
-    slug = name.split("/")[-1] if name else repo.name
-    if not any(e.get("slug") == slug for e in entries):
-        entries.append({"slug": slug, "path": str(main_checkout(repo)), "base_branch": base})
+    slug = repo_slug(repo)  # the seed slug (opascope/skills -> opascope-skills), the key site.json uses
+    path = str(main_checkout(repo))
+    # an entry enrolled before the alias fix carries the GitHub name ("skills"): match it by its checkout
+    # or by that legacy name and rename it in place, never append a second entry for the same repo
+    legacy = {n.split("/")[-1] for n, s in SEED_ALIASES.items() if s == slug}
+    same = [e for e in entries if e.get("slug") == slug
+            or str(Path(e.get("path", "")).expanduser().resolve()) == path or e.get("slug") in legacy]
+    # the legacy slugs' local paths are always checked, even when repos.json already holds the new slug: a
+    # partial or hand migration can leave state under the old name, which the routine would then never read
+    # (Codex P2 on #1118). Each path moves, or the whole step refuses before repos.json changes.
+    move_slug_paths(sorted((legacy | {x.get("slug") for x in same}) - {slug, None}), slug, path, done)
+    if same:
+        e = same[0]
+        if e.get("slug") != slug or e.get("path") != path or len(same) > 1:
+            old = e.get("slug")
+            e.update(slug=slug, path=path)
+            entries = [x for x in entries if x is e or not any(x is s for s in same)]
+            reposj.write_text(json.dumps(entries, indent=1) + "\n", encoding="utf-8")
+            done.append(f"repos.json: {old} -> {slug} at {path} (updated in place)")
+        else:
+            done.append(f"repos.json has {slug}")
+    else:
+        entries.append({"slug": slug, "path": path, "base_branch": base})
         reposj.write_text(json.dumps(entries, indent=1) + "\n", encoding="utf-8")
         done.append(f"repos.json += {slug} (enroll it in the routine only after the first enrolled repo completes one cycle)")
     if clone:
@@ -593,7 +662,7 @@ def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None)
 # ------------------------------------------------------------------ upgrade (RE10)
 
 def upgrade(skill_root: Path, repo: Path, plugins=(), push: bool = True) -> Tuple[int, str]:
-    """Open the vendored tools/docs upgrade PR (branch docs/upgrade-<sha>, auto-merge on green) and run
+    """Open the vendored tools/docs upgrade PR (branch docs/upgrade-<sha>, never auto-merged) and run
     every plugin's layout upgrade to the vendored layout_version in the same PR."""
     repo = Path(repo)
     cfg = config.load(repo) or {}
@@ -621,5 +690,7 @@ def upgrade(skill_root: Path, repo: Path, plugins=(), push: bool = True) -> Tupl
             + proof + "\n```\n")
     out = sh([gh_bin(), "pr", "create", "--base", base, "--head", branch, "--title",
               f"chore(docs): upgrade tools/docs to {sha[:12]}", "--body", body], cwd=repo).stdout.strip()
-    sh([gh_bin(), "pr", "merge", out, "--auto", "--squash"], cwd=repo, check=False)
+    # Never `--auto`: an upgrade PR changes the vendored engine, so it needs an independent review at head
+    # like any other PR (.claude/rules/pr-review.md). The daily routine requests that review and merges only
+    # on a clean verdict at head plus green required CI (routine.try_merge_upgrade_pr).
     return 0, f"upgrade PR {out}"
