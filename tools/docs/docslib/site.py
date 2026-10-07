@@ -15,7 +15,7 @@ SKILL_ROOT = Path(__file__).resolve().parent.parent
 SITE_FILE = "site.json"
 
 DEFAULTS = {
-    "owner": "the owner",            # who approves maps, roadmap changes and daily PRs (in messages)
+    "owner": "the owner",            # who approves MIGRATION MAPS and roadmap changes (daily PRs are review-gated, not owner-gated)
     "home_clone_dir": "skill-home",  # the routine's dedicated clone, under data_home()
     "home_clone_url": None,          # required for `init --stage local --clone`
     "home_base_branch": "main",      # the routine checks the clone out at origin/<this>; the PIN trust ref
@@ -23,6 +23,8 @@ DEFAULTS = {
     "seeds": {},                     # repo slug -> init seed (docs.json starting values)
     "seed_aliases": {},              # GitHub owner/name -> seed slug, where they differ
     "update_before_merge": [],       # repo slugs merged by update-branch instead of a strict gate
+    "review_request": {"comment": "@codex review"},  # daily-PR review request; a seed may add a ledgered `command`
+    "merge_gate": {},                # daily-PR merge gate; a seed adds `command` (reviewer verdict by exit code), else no auto-merge
 }
 
 

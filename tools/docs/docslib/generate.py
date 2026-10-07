@@ -1,9 +1,11 @@
 """Generators (manage-docs v2 sections 2, 6 check 4, 8.2 "generators LAST").
 
 Built in:
-- `docs-map` -> docs/README.md: every live doc, one line: title, owner area, receipt status. It
-  prints only STORED values (`verified.at` or "unverified"), never computed age or drift, so
-  `generate --check` does not change day to day with no repo change (eng-review P2).
+- `docs-map` -> docs.json `docs_map` (default docs/README.md): every live doc, one line: title,
+  owner area, receipt status. It prints only STORED values (`verified.at` or "unverified"), never
+  computed age or drift, so `generate --check` does not change day to day with no repo change
+  (eng-review P2). A repo with a hand-written docs/README.md sets `docs_map` to another path
+  (e.g. docs/DOCS-MAP.md) so the generator never clobbers the curated README.
 - `work-index` -> work/README.md: every record with kind, date and status (private repos only;
   in a public repo work/ is local-only).
 
@@ -14,6 +16,9 @@ docs.json `generators` entries:
   (e.g. a repo's agent-docs router); `generate` runs cmd, `generate --check` runs check.
 
 A generated file starts with `<!-- manage-docs:generated id=<id> hash=<sha256 of the rest> -->`.
+A built-in generator REFUSES to overwrite an existing output file that does not carry its own
+`manage-docs:generated id=<id>` marker, so a hand-written file at a generated path fails loudly
+(name plus the docs.json key to set) instead of being clobbered.
 """
 from __future__ import annotations
 
@@ -25,7 +30,7 @@ from typing import Dict, List, Optional, Tuple
 
 from docslib import config, frontmatter, receipts
 
-MAP = "docs/README.md"
+MAP = config.DEFAULT_DOCS_MAP  # the default map path; the active path is config.docs_map_path(cfg)
 ROADMAP_TEMPLATES = "docs/roadmap/templates/"
 WORK_INDEX = "work/README.md"
 HEADER_EXT = (".md", ".mdx", ".html")
@@ -66,8 +71,9 @@ def _title(text: str, fm: Optional[dict], path: str) -> str:
 def docs_map(root: Path, cfg: dict) -> str:
     root = Path(root)
     rows: Dict[str, List[str]] = {}
+    map_path = config.docs_map_path(cfg)
     for p in _tracked(root):
-        if not p.startswith("docs/") or p == MAP or not config.is_doc(cfg, p):
+        if not p.startswith("docs/") or p == map_path or not config.is_doc(cfg, p):
             continue
         if p.startswith(ROADMAP_TEMPLATES):
             continue  # blank forms for new epics and milestones (<epic name>), not docs anyone reads
@@ -173,7 +179,7 @@ def unwrap(text: str) -> str:
 
 
 def builtin(cfg: dict) -> List[dict]:
-    gens = [{"id": "docs-map", "output": MAP, "builtin": docs_map}]
+    gens = [{"id": "docs-map", "output": config.docs_map_path(cfg), "builtin": docs_map}]
     if not config.is_public(cfg):
         gens.append({"id": "work-index", "output": WORK_INDEX, "builtin": work_index})
     return gens
@@ -190,6 +196,24 @@ def render(root: Path, cfg: dict, gen: dict) -> str:
     if p.returncode != 0:
         raise GenerateError(f"generator {gen['id']} failed ({p.returncode}): {p.stderr.strip()[:400]}")
     return p.stdout
+
+
+def _guard_overwrite(fp: Path, gen_id: str, output: str) -> None:
+    """Refuse to clobber a file at a generated output path that is not already that generator's
+    output. A file with no `manage-docs:generated` header, or one stamped by a different generator,
+    is treated as hand-written: fail loudly (name the file and the docs.json key to set) instead of
+    overwriting it. Only header-bearing outputs can carry the marker, so only those are guarded."""
+    if not output.endswith(HEADER_EXT) or not fp.is_file():
+        return
+    existing = fp.read_text(encoding="utf-8", errors="replace")
+    found = receipts.generated_id(existing)
+    if found == gen_id:
+        return
+    key = "docs_map" if gen_id == "docs-map" else "generators"
+    saw = f"a different generator (id={found})" if found else "no manage-docs:generated marker"
+    raise GenerateError(
+        f"refusing to overwrite {output}: it is hand-written ({saw}), not the output of generator "
+        f"`{gen_id}`. Point `{gen_id}` at another path (set `{key}` in docs.json) or remove the file.")
 
 
 def run(root: Path, cfg: dict, check: bool = False, builtin_only: bool = False) -> Tuple[int, List[str]]:
@@ -211,6 +235,7 @@ def run(root: Path, cfg: dict, check: bool = False, builtin_only: bool = False) 
         content = render(root, cfg, gen)
         want = wrap(gen["id"], content, gen["output"])
         fp = root / gen["output"]
+        _guard_overwrite(fp, gen["id"], gen["output"])
         have = fp.read_text(encoding="utf-8") if fp.is_file() else None
         if have == want:
             continue

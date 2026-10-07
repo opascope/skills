@@ -71,6 +71,13 @@ def is_generated(text: str) -> bool:
     return bool(GENERATED_RX.search(head))
 
 
+def generated_id(text: str) -> Optional[str]:
+    """The generator id in a file's `manage-docs:generated` header, or None when it carries none."""
+    head = "\n".join(text.splitlines()[:3])
+    m = GENERATED_RX.search(head)
+    return m.group(1) if m else None
+
+
 def generated_header(gen_id: str, content: str) -> str:
     """Header line for a manage-docs generated markdown file; the hash covers `content`."""
     return f"<!-- manage-docs:generated id={gen_id} hash={sha256_text(content)} (never edit by hand) -->\n"
