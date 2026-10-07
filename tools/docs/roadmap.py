@@ -60,7 +60,7 @@ ORDER_SECTIONS = ["Now", "Next", "Later"]
 CHAT_RX = re.compile(r"confirmed by [^\n:]{1,60}? in chat:\s*\S", re.I)
 BEADS_RX = re.compile(r"^beads:\s*([A-Za-z0-9][\w.-]*)\s*$", re.M)
 # A milestone states its entry and exit conditions in plain words. Dates are for a defined
-# test period only; `target:` is optional and names that dated window, not a deadline (R-2026-10-06-47).
+# test period only; `target:` is optional and names that dated window, not a deadline.
 STARTS_RX = re.compile(r"^starts_when:\s*(.+?)\s*$", re.M)
 EXITS_RX = re.compile(r"^exits_when:\s*(.+?)\s*$", re.M)
 TARGET_RX = re.compile(r"^target:\s*(\d{4}-\d{2}-\d{2})\s*$", re.M)

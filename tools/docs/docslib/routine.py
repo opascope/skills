@@ -42,7 +42,7 @@ INFLIGHT = re.compile(r"^docs/(bootstrap|migrate-|port-)")
 SUPPRESS_DAYS = 30
 SUPERSEDED = "manage-docs: superseded by a fresh run (conflict)"
 REVIEW_COMMENT = "@codex review"
-# A daily PR closed unmerged is rejected: its change suppresses for 30 days (R-2026-10-03-27). An
+# A daily PR closed unmerged is rejected: its change suppresses for 30 days. An
 # explicit `manage-docs:reject <reason>` on that closed PR names the reason; a close is the only trusted
 # rejection trigger (free text on an OPEN PR is never inferred as a verdict).
 LEGACY_REJECT_RX = re.compile(r"^manage-docs:reject\s*(.*)", re.S)
@@ -327,7 +327,7 @@ def suppress_fingerprints(slug: str, changes: List[dict], now: dt.datetime, reas
 
 def process_rejection(repo_root: Path, slug: str, now: dt.datetime) -> List[dict]:
     """Read the previously opened daily PR. A CLOSE that is not a merge rejects it: its fingerprints
-    suppress for 30 days (R-2026-10-03-27, no owner-only trigger). A MERGE is acceptance. An OPEN PR is
+    suppress for 30 days (no owner-only trigger). A MERGE is acceptance. An OPEN PR is
     left untouched here: a reviewer's "changes needed" is NOT inferred from free-text on an open PR
     (any commenter could forge it, a stale verdict could trigger it). The trusted rejection signals are a
     privileged CLOSE (handled here) and the merge gate's head-anchored findings verdict, which
@@ -399,8 +399,8 @@ def pr_body(section: str, changes: List[dict], cfg: Optional[dict] = None) -> st
                  key=lambda c: fp_key(c))
     return ("Daily docs maintenance. Reviewed like any agent PR (a review is requested when the head "
             "moves). A later routine run may merge this automatically once there is a clean independent "
-            "review at the current head AND green required CI at that head, pinned to the reviewed head "
-            "(R-2026-10-03-27, manage-docs v2 section 8); a reviewer or the lead can also merge it. The "
+            "review at the current head AND green required CI at that head, pinned to the reviewed head; "
+            "a reviewer or a maintainer can also merge it. The "
             "routine never merges on its own judgement.\n\n"
             + section + "\n\n<!-- manage-docs:changes " + json.dumps(fps, sort_keys=True) + " -->\n")
 
@@ -449,7 +449,7 @@ def request_review(root: Path, number: int, env: Optional[Dict[str, str]] = None
     return True
 
 
-# ------------------------------------------------------------------ deterministic merge (R-2026-10-03-27)
+# ------------------------------------------------------------------ deterministic merge
 
 def _nwo_from_url(url: Optional[str]) -> Optional[str]:
     m = NWO_RX.search(url or "")
@@ -536,7 +536,7 @@ def behind_base_note(root: Path, nwo: Optional[str], slug: str, number: int, lab
 
 def try_merge_daily_pr(root: Path, entry: dict, clone_root: Path,
                        now: Optional[dt.datetime] = None) -> Optional[str]:
-    """Deterministic merge of an open docs-maintain PR at the START of a routine run (R-2026-10-03-27):
+    """Deterministic merge of an open docs-maintain PR at the START of a routine run:
     merge ONLY on a clean independent review at the CURRENT head AND green required CI, pinned to that
     head with `--match-head-commit`. Never on the routine's own judgement. Any miss leaves the PR for a
     reviewer or the lead. Returns a one-line outcome, or None when there is no open daily PR.
@@ -884,7 +884,7 @@ def open_upgrade_pr(root: Path) -> Optional[dict]:
 
 def try_merge_upgrade_pr(root: Path, entry: dict, clone_root: Path, pr: dict) -> str:
     """Merge an open upgrade PR ONLY on a clean independent review at its CURRENT head plus green required
-    CI, pinned with --match-head-commit: the daily PR's gate (R-2026-10-03-27). Never --auto, never on the
+    CI, pinned with --match-head-commit: the daily PR's gate. Never --auto, never on the
     routine's own judgement. Unlike the daily PR, findings never close it: an engine upgrade is left open
     for a human whatever the verdict. Returns a one-line outcome; "merged (" only when it landed."""
     number, head = pr["number"], pr.get("headRefOid") or ""
@@ -1324,7 +1324,7 @@ ROUTINE_PROMPT = """Run the manage-docs daily routine on this machine (manage-do
 3. Report the output in one short message. Exit 5 means another run holds the lock or quota is above
    90%: if quota, schedule the next run after the printed resets_at.
 
-This run (R-2026-10-03-27): for each repo it first merges yesterday's daily docs PR ONLY when an
+This run: for each repo it first merges yesterday's daily docs PR ONLY when an
 independent review is clean at the PR's current head AND required CI is green there, pinned to that
 head (`--match-head-commit`); any miss leaves the PR for a reviewer or the lead. It then opens or
 updates today's daily docs PR and requests a review on it (the ledgered `@codex review`). When a repo's

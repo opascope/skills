@@ -557,7 +557,7 @@ def active_default_hooks(repo: Path) -> List[str]:
 
 
 def label_description(cfg: dict) -> str:
-    """The marker on the one daily docs PR. It is review-gated like any agent PR (R-2026-10-03-27), not
+    """The marker on the one daily docs PR. It is review-gated like any agent PR, not
     owner-gated, so the description names no person and makes no approval claim."""
     return "manage-docs daily docs maintenance PR"
 

@@ -7,7 +7,7 @@ size: <S, M or L, or a short phrase for how big this milestone is>
 starts_when: <the plain condition that lets this milestone begin; "not yet placed" if none yet>
 exits_when: <the plain condition that means it is done>
 
-<!-- Roadmaps carry no target dates (R-2026-10-06-47). State the entry and exit conditions in
+<!-- Roadmaps carry no target dates. State the entry and exit conditions in
 words, not a deadline. Add `target: YYYY-MM-DD` only when this milestone defines a dated test
 period; it names that test window, never a due date. -->
 
