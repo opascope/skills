@@ -64,6 +64,14 @@ class UpdateTests(unittest.TestCase):
         self.assertNotIn('The first thing.', text)
         self.assertNotIn('## 0.1.0', text)
 
+    def test_whats_new_reads_dated_bracketed_headings(self):
+        (self.reader / 'CHANGELOG.md').write_text(
+            '# Changelog\n\n## [Unreleased]\n\n- Not out yet.\n\n'
+            '## [0.2.0] - 2026-10-08\n\n- The new thing.\n\n## 0.1.0\n\n- The first thing.\n')
+        with patch.object(kit, 'ROOT', self.reader):
+            sections = kit.whats_new((0, 1, 0), (0, 2, 0))
+        self.assertEqual(sections, ['## [0.2.0] - 2026-10-08\n\n- The new thing.'])
+
     def test_dirty_checkout_preserved(self):
         (self.reader / 'personal.txt').write_text('uncommitted')
         with patch.object(kit, 'ROOT', self.reader), contextlib.redirect_stdout(io.StringIO()):

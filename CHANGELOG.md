@@ -1,6 +1,21 @@
 # Changelog
 
-## 0.6.0
+All notable changes to these skills are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
+follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The `VERSION`
+file holds the current version. Every change adds one plain line under
+`## [Unreleased]`, and each release is cut the way
+[docs/runbooks/cutting-release.md](docs/runbooks/cutting-release.md) describes.
+
+## [Unreleased]
+
+### Changed
+
+- Version headings in this file now carry the release date, so you can see when
+  each version came out. If you update from an older version, `kit.py update`
+  may skip the "What's new" list this one time; read this file instead.
+
+## [0.6.0] - 2026-09-26
 
 - Skills are named for what they do: `interrogate`, `define-done`, `planning`,
   `session-handoff`, `optimize`, `loop-builder`. If another skill already has a
@@ -18,7 +33,7 @@
   [docs/verification.md](docs/verification.md); recorded per-release results run
   through 0.4.0.
 
-## 0.5.1
+## [0.5.1] - 2026-09-25
 
 - `install.py status` now shows every place the skills are installed. Before,
   it only looked in your home folder and missed project installs.
@@ -28,7 +43,7 @@
 - The installer will not install inside the cloned folder itself. That blocked
   later updates.
 
-## 0.5.0
+## [0.5.0] - 2026-09-25
 
 - Each skill folder now sits at the top of the repo. Open the repo and the
   skills are the first thing you see.
@@ -39,7 +54,7 @@
 - Contributors run the checks as `python3 lib/promise.py check` and
   `python3 lib/plainlang.py --strict`.
 
-## 0.4.0
+## [0.4.0] - 2026-09-24
 
 - Skills start with `kit.py start`. It only reads. It shows your tasks, what
   each has saved, and the next step.
@@ -53,7 +68,7 @@
   held on each, fixtures unchanged. See the archived release results
   (`git show 69dd74c:docs/verification.md`).
 
-## 0.3.0
+## [0.3.0] - 2026-09-08
 
 - Checks rewritten after an outside audit fed them plausible wrong answers. Most
   were phrase lists a reasonable wrong output walked past, and six could never
@@ -77,7 +92,7 @@
 - GitHub Actions runs the tests, the contract check and the language gate on
   every push, on the oldest and newest supported Python.
 
-## 0.2.0
+## [0.2.0] - 2026-09-07
 
 - Per-skill promise contracts with adversarial checks, checked offline against
   fabricated outputs and one live run of a single skill.
@@ -86,7 +101,7 @@
 - README rewritten in plain words against that gate, and given headings
   written as the questions a reader actually asks.
 
-## 0.1.0
+## [0.1.0] - 2026-09-07
 
 - Six portable work-process skills and a router for Claude Code and Codex CLI.
 - Shared project-local artifacts and explicit cold-session pickup.

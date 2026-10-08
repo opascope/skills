@@ -1,0 +1,48 @@
+# Changelog check (Opascope release standard, B-003).
+#
+# The "what users get" gate: every PR must add one plain bullet under
+# "## [Unreleased]" in CHANGELOG.md, unless it declares "no user-visible change"
+# (or "changelog: none") in the PR body or a commit message. This is the release
+# standard's per-change half; scripts/changelog_guard.py is the checker, shaped
+# like the manage-docs frontmatter check.
+#
+# Runs on ubuntu-latest (no runner needed) and reads only git and the PR body.
+# To enforce it, add "Changelog check" to the branch ruleset's required checks;
+# that is an admin action, separate from this workflow landing.
+
+name: Changelog check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    name: What users get
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Check for a changelog line
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.txt"
+          git cat-file -e "$BASE_SHA" 2>/dev/null || git fetch -q origin "$BASE_SHA"
+          python3 scripts/changelog_guard.py check \
+            --base "$BASE_SHA" --head HEAD \
+            --body-file "$RUNNER_TEMP/pr-body.txt" --annotate

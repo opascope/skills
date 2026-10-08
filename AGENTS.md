@@ -5,7 +5,9 @@ standard library only. Only `openrouter` and `jevify` call outside models; they 
 `OPENROUTER_API_KEY`, show each call's cost, and stop cleanly without it. Read ARCHITECTURE.md before changing artifact semantics.
 Canonical skill instructions live in the skill folders at the repo root, never in generated copies.
 
-Use feature branches and pull requests to main. Run
+Use feature branches and pull requests to main. Every PR adds one plain line
+under `## [Unreleased]` in CHANGELOG.md, or says `no user-visible change`; releases
+follow docs/runbooks/cutting-release.md. Run
 `python3 -m unittest discover -s tests -v` before merging. Runtime smoke tests are
 separate, opt-in checks using installed Claude Code and Codex accounts.
 

@@ -207,7 +207,7 @@ def whats_new(old, new):
         return []
     sections, current = [], None
     for line in path.read_text().splitlines():
-        match = re.fullmatch(r'## (\d+)\.(\d+)\.(\d+)\b.*', line)
+        match = re.fullmatch(r'## \[?(\d+)\.(\d+)\.(\d+)\b.*', line)
         if match or line.startswith('## ') or line.startswith('# '):
             current = [tuple(map(int, match.groups())), [line]] if match else None
             if current:
