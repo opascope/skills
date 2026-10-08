@@ -1,0 +1,64 @@
+# Release published (Opascope release standard, B-003; R-2026-10-07-219).
+#
+# Every working -> main promote carries a release: the promoting session runs
+# `scripts/release.py publish --confirm --target <sha>` right after the promote
+# merges. This workflow is the backstop that keeps that step from being
+# forgotten quietly. It reads main's VERSION and goes red when the tag
+# v<VERSION> does not exist two hours after the commit that set that VERSION
+# landed on main.
+#
+# It NEVER publishes. Publishing stays a local step because `publish` writes
+# the fail-closed `github.release` row to the outbound ledger before the wire
+# call, and an ephemeral runner has no ledger. It also creates no issue and
+# posts nowhere: a red scheduled run is the whole signal, so it adds no outbound
+# surface. It never gates a merge.
+#
+# Runs on ubuntu-latest (no self-hosted runner needed) and reads only git.
+
+name: Release published
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-published
+  cancel-in-progress: true
+
+jobs:
+  tag:
+    name: Main's version has a release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check for the v<VERSION> tag
+        env:
+          GRACE_SECONDS: "7200"
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          tag="v${version}"
+          # fetch-depth 0 brings every tag with the history, so this is a local read.
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "OK ${tag} is published"
+            exit 0
+          fi
+          # --first-parent: the time the promote merge brought this VERSION onto
+          # main, not when the cut PR merged to working.
+          set_at="$(git log -1 --first-parent --format=%ct -- VERSION)"
+          sha="$(git log -1 --first-parent --format=%H -- VERSION)"
+          age=$(( $(date +%s) - set_at ))
+          if [ "$age" -lt "$GRACE_SECONDS" ]; then
+            echo "WAITING ${tag} not tagged yet; VERSION landed on main ${age}s ago"
+            exit 0
+          fi
+          echo "::error title=Release not published::main is at VERSION ${version} but ${tag} does not exist. From a clean detached checkout of ${sha}, run: python3 scripts/release.py publish --confirm --target ${sha}"
+          exit 1
