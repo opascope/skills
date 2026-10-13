@@ -9,11 +9,16 @@ file holds the current version. Every change adds one plain line under
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-13
+
+In short: this file now shows the date each version came out, so you can tell
+how old the version you run is.
+
 ### Changed
 
-- Version headings in this file now carry the release date, so you can see when
-  each version came out. If you update from an older version, `kit.py update`
-  may skip the "What's new" list this one time; read this file instead.
+- Each version heading in this file now carries its release date. If you update
+  from an older version, the "What's new" list may be skipped this one time;
+  read this file instead.
 
 ## [0.6.0] - 2026-09-26
 
@@ -108,3 +113,5 @@ file holds the current version. Every change adds one plain line under
 - Interactive link installation, ownership receipts and reversible uninstall.
 - Bounded foreground loops with independently executed proofs.
 - Offline usage ranking and explicit versioned updates.
+
+[0.7.0]: https://github.com/opascope/skills/releases/tag/v0.7.0
