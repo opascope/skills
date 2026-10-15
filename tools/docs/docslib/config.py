@@ -28,6 +28,7 @@ DEFAULTS = {
     "frontmatter_exempt": [],
     "router": {"mode": "block"},
     "generators": [],
+    "docs_map": "docs/README.md",
     "records_window_days": 30,
     "receipt_max_age_days": 30,
     "verify_budget_per_run": 10,
@@ -37,6 +38,10 @@ DEFAULTS = {
     "deny_terms_file": None,
     "inventory_exclude": [],
     "roadmap": {},
+    # X12: entry-point docs (no frontmatter, so receipt staleness never covers them). Repo-wide,
+    # WARN-only signals flag one unchanged longer than entrypoint_max_age_days, or naming a dead path.
+    "entrypoints": ["*.md", "docs/README.md", "apps/*/README.md", "packages/*/README.md"],
+    "entrypoint_max_age_days": 180,
 }
 
 # Paths that never leave the machine in a public repo (contract section 7).
@@ -86,6 +91,11 @@ def placed(cfg: dict, path: str) -> bool:
     return globs.any_match(cfg.get("root_allow", []), path) or globs.any_match(cfg.get("md_allow", []), path)
 
 
+def is_entrypoint(cfg: dict, path: str) -> bool:
+    """A doc the entrypoint check watches for staleness and dead path references (X12)."""
+    return globs.any_match(cfg.get("entrypoints") or [], path)
+
+
 def is_public(cfg: dict) -> bool:
     return cfg.get("visibility") == "public"
 
@@ -98,11 +108,33 @@ def is_record(path: str) -> bool:
     return path.startswith("work/")
 
 
+# The repo-relative path the built-in `docs-map` generator writes. docs/README.md by default, so a
+# repo that does not set `docs_map` keeps its generated map there; a repo with a hand-written
+# docs/README.md points `docs_map` at another path (e.g. docs/DOCS-MAP.md) to protect the README.
+DEFAULT_DOCS_MAP = "docs/README.md"
+
+
+def docs_map_path(cfg: dict) -> str:
+    return cfg.get("docs_map") or DEFAULT_DOCS_MAP
+
+
+# The docs router fragment init writes for repos that compose AGENTS.md / CLAUDE.md from docs/agent/
+# fragments: its text lands in the ROOT files, so its links are root-relative and it carries no frontmatter.
+ROUTER_FRAGMENT = "docs/agent/_docs-router.md"
+
+
+def link_base(path: str) -> str:
+    """The path a doc's relative links resolve from: the doc itself, or the repo root for the router fragment."""
+    return "AGENTS.md" if path == ROUTER_FRAGMENT else path
+
+
 def frontmatter_required(cfg: dict, path: str) -> bool:
     """Hand-written docs in docs/ outside roadmap/ and generated/ carry frontmatter (7.1)."""
     if not path.startswith("docs/") or path.startswith(("docs/roadmap/", "docs/generated/")):
         return False
-    if path == "docs/README.md":
+    # The README and the router fragment are READMEs, not ours to parse; the generated docs map
+    # (wherever docs_map points it) carries a generated header, not frontmatter.
+    if path in ("docs/README.md", ROUTER_FRAGMENT, docs_map_path(cfg)):
         return False
     if not path.endswith((".md", ".mdx")):
         return False

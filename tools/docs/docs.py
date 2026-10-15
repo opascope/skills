@@ -17,8 +17,12 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
+from collections import Counter
+from types import SimpleNamespace
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -155,7 +159,7 @@ def triage(item, cfg):
         return "record:work-item"
     if constitution_cited(item["signals"].get("live_refs") or []):
         return "keep"  # constitution- or rule-cited: byte-identical, frontmatter-exempt
-    if path.startswith(LAYOUT_DIRS) or path == "docs/README.md":
+    if path.startswith(LAYOUT_DIRS) or path in ("docs/README.md", config.docs_map_path(cfg)):
         return "keep"
     if not path.startswith("docs/") and config.placed(cfg, path):
         return "keep"  # already where the standard puts it (root files, .claude/**, package READMEs)
@@ -192,21 +196,118 @@ def kept_unchanged(root, row) -> bool:
     return migrate.sha256_text(fp.read_text(encoding="utf-8", errors="replace")) == row["source_hash"]
 
 
+DUP_ID = re.compile(r"duplicate frontmatter id (.+) \(also (.+)\)")
+
+
+def debt_keys(check, path: str, message: str) -> list:
+    """How a failure is matched against base: (check, path, message). A duplicate id is reported on whichever
+    of its documents sorts later, so a move can shift it onto the other one (Codex P2s, #1121): it keys on the
+    id, once for EACH document that holds it, the reported one first. A document that newly takes an id
+    other documents already share is in none of the base keys, so it still blocks."""
+    m = DUP_ID.fullmatch(message)
+    if not m:
+        return [(check, path, message)]
+    return [(check, p, "duplicate frontmatter id " + m.group(1)) for p in (path, m.group(2))]
+
+
+def base_failures(repo, cfg, plugins=()) -> Counter:
+    """How often each debt_key fails at the base sha, with the same checks (and the same plugins) run in a
+    throwaway detached worktree like rehearse's. Empty when the run has no base."""
+    if not repo.base:
+        return Counter()
+    tmp = Path(tempfile.mkdtemp(prefix="manage-docs-base-"))
+    wt = tmp / "wt"
+    try:
+        subprocess.run(["git", "worktree", "add", "--detach", "--quiet", str(wt), repo.base], cwd=repo.root,
+                       check=True, capture_output=True)
+        # a count per key, not a set: a second identical failure the run adds is new debt (Codex P2, #1121)
+        return Counter(k for r in checks.run(checks.Ctx(wt, cfg, scope="all"), plugins) if r["level"] == "fail"
+                       for k in debt_keys(r["check"], r["path"], r["message"]))
+    finally:
+        subprocess.run(["git", "worktree", "remove", "--force", str(wt)], cwd=repo.root, capture_output=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def migration_debt(root: Path, cfg: dict, base: str, run_dirs: list, results: list, plugins=()) -> None:
+    """`check --pr` on a migration PR: a per-file failure on a path the run's ledger covers (a kept file the
+    run relinked, or a destination, matched at its sources) warns when the same failure, counted per
+    occurrence, already fails at the base, the rule `verify --ci` applies (#1121). A roadmap-rule failure on
+    a file the approved map keeps at its own path warns too: the PR that adopts the roadmap layout cannot also
+    move what the map kept, and the base, with no layout yet, runs no roadmap rules to compare against.
+    Anything else still fails. Edits `results` in place."""
+    source_of: dict = {}
+    kept_in_place: set = set()
+    for rd in run_dirs:
+        led = root / "work" / "runs" / rd / "ledger.jsonl"
+        if not led.is_file():
+            continue
+        for line in led.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            src = row.get("source_path") or ""
+            if src.startswith("@"):
+                continue
+            for d in row.get("dest") or [src]:
+                source_of.setdefault(d, set()).add(src)
+            if row.get("disposition") == "keep" and not row.get("dest"):
+                kept_in_place.add(src)
+    pre = None
+    for r in results:
+        if r["level"] != "fail":
+            continue
+        srcs = source_of.get(r["path"])
+        dup = DUP_ID.fullmatch(r["message"])
+        if srcs is None and dup and dup.group(2) in source_of:
+            # a move can shift a duplicate id onto the unchanged twin of the moved document (Codex P2 on #1127):
+            # the twin is matched at its own path, which base keyed for both documents of the pair
+            srcs = {r["path"]}
+        if srcs is None:
+            continue
+        if r["check"] == "roadmap" and r["path"] in kept_in_place:
+            r["level"], r["message"] = "warn", r["message"] + " (kept in place by the approved map)"
+            continue
+        if pre is None:  # computed once, and only when a covered path fails
+            pre = Counter(base_failures(SimpleNamespace(root=root, base=base), cfg, plugins))
+        keys = [debt_keys(r["check"], s, r["message"])[0] for s in sorted(srcs)]
+        hit = next((k for k in keys if pre[k] > 0), None)
+        if hit is not None:
+            pre[hit] -= 1
+            r["level"], r["message"] = "warn", r["message"] + " (pre-existing at base)"
+
+
 def verify(repo, ledger):
     """Section 6 checks over the migrated tree: debt warns, paths the run touched fail; rewrite
-    receipts' covers_hash recomputed (the engine checks doc_hash)."""
+    receipts' covers_hash recomputed (the engine checks doc_hash). A failure in a touched path blocks only
+    when the same check does not also fail at the base sha (lead, U.05): debt the run did not introduce,
+    such as an old broken link in a file relink edited, warns and is listed; anything the run causes fails."""
     cfg = config.merged(repo.cfg)
     ctx = checks.Ctx(repo.root, cfg, scope="all")
     touched = set()
+    source_of: dict[str, set] = {}  # a destination several moves merge into keeps EVERY source (Codex P1, #1121)
     for row in ledger:
         touched.update(row.get("dest") or [])
+        for d in row.get("dest") or []:
+            source_of.setdefault(d, set()).add(row["source_path"])
         if row.get("disposition") == "rewrite" or (row.get("disposition") == "keep"
                                                    and not kept_unchanged(repo.root, row)):
             touched.add(row["source_path"])
     out = []
+    pre = None
     for r in checks.run(ctx):
+        msg = f"[{r['check']}] {r['path']}: {r['message']}"
         blocking = "fail" if (r["level"] == "fail" and r["path"] in touched) else "warn"
-        out.append({"item_id": None, "message": f"[{r['check']}] {r['path']}: {r['message']}", "blocking": blocking})
+        if blocking == "fail":
+            if pre is None:  # computed once, and only when a touched path fails
+                pre = Counter(base_failures(repo, cfg))
+            # matched at each source path; a duplicate id only by the touched document itself (its first key).
+            # Each base occurrence covers one current failure, then is used up.
+            keys = [debt_keys(r["check"], src, r["message"])[0] for src in sorted(source_of.get(r["path"], {r["path"]}))]
+            hit = next((k for k in keys if pre[k] > 0), None)
+            if hit is not None:
+                pre[hit] -= 1
+                blocking, msg = "warn", msg + " (pre-existing at base)"
+        out.append({"item_id": None, "message": msg, "blocking": blocking})
     for row in ledger:
         if row.get("disposition") != "rewrite" or not row.get("receipt"):
             continue
@@ -314,15 +415,19 @@ def cmd_check(a) -> int:
         except coldread.ColdReadError as exc:
             print(f"read-test: {exc}")
             return 1
-    ctx = checks.Ctx(root, cfg, scope=scope, base=a.pr, head_ref=a.head_ref, local=a.local)
+    ctx = checks.Ctx(root, cfg, scope=scope, base=a.pr, head_ref=a.head_ref, local=a.local,
+                     base_ref=a.base_ref)
     results = checks.run(ctx, plugins)
     if a.local and config.is_public(cfg):
         results += checks.check7_loosening(ctx, force_local=True) if scope == "pr" else []
+    mig = sorted({p.split("/")[2] for p in ctx.changed("ACMR")
+                  if re.match(r"^work/runs/\d{4}-\d{2}-\d{2}-migration/", p)}) if scope == "pr" else []
+    if mig:
+        migration_debt(root, cfg, a.pr, mig, results, plugins)
     rc = checks.exit_code(results, scope)
     if results:
         print(checks.render(results, annotate=a.annotate or bool(os.environ.get("GITHUB_ACTIONS"))))
     if scope == "pr":
-        mig = sorted({p.split("/")[2] for p in ctx.changed("ACMR") if re.match(r"^work/runs/\d{4}-\d{2}-\d{2}-migration/", p)})
         for run_dir in mig:
             argv = [sys.executable, str(HERE / "engine" / "migrate.py"), "verify", "--ci", "--base", ctx.base,
                     "--run", run_dir[:10], "--repo", str(root)]
@@ -402,13 +507,15 @@ def cmd_where(a) -> int:
 
 def cmd_approval_request(a) -> int:
     root = repo_root(a.repo)
+    cfg = load_cfg(root, required=False)
     view = routine.gh_json(root, "pr", "view", str(a.pr), "--json", "body")
     changes = routine.changes_from_body((view or {}).get("body", ""))
     for c in changes:
         if c["op"] == "receipt":
             c["title"] = routine.doc_title(root, c["path"])
         if c["op"] == "generate":
-            c["label"] = {"docs/README.md": "the docs map", "work/README.md": "the records index"}.get(
+            c["label"] = {config.docs_map_path(cfg): "the docs map",
+                          "work/README.md": "the records index"}.get(
                 c["path"], f"the generated file {c['path']}")
     print(routine.approval_section(routine.docs_lines(changes, []), routine.roadmap_lines(other_plugins(), root, changes)))
     return 0
@@ -558,6 +665,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--read-test", action="store_true", help="cold-read test (local only)")
     s.add_argument("--local", action="store_true", help="add local-only checks")
     s.add_argument("--head-ref", help="PR head branch (path guard); default $GITHUB_HEAD_REF")
+    s.add_argument("--base-ref", help="PR base branch (path guard promotion exemption); "
+                                      "default $GITHUB_BASE_REF")
     s.add_argument("--annotate", action="store_true", help="GitHub annotation output")
 
     s = sub.add_parser("verify", help="claim check: --prepare, --finish, or --run (both + reviewer)")
@@ -584,7 +693,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--repo-slug", "--for", dest="repo_slug", help="only this enrolled repo")
     s.add_argument("--here", action="store_true", help="run the phases in this worktree (routine internal)")
     s.add_argument("--slug", help=argparse.SUPPRESS)
-    s.add_argument("--no-verify", action="store_true", help="skip claim checks (quota above 70%)")
+    s.add_argument("--no-verify", action="store_true", help="skip claim checks (quota above 70%%)")
     s.add_argument("--no-push", action="store_true", help="local dry run: commit, print the PR body")
 
     s = sub.add_parser("migrate", help="run the vendored engine with both plugins")
