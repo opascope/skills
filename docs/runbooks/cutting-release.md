@@ -27,9 +27,10 @@ whats new". They are the PR-as-decision-record approach
 turned toward the people who use the tool rather than the reviewer: lead with
 what changed for them, say why, then stop.
 
-- **Open with a short "In short" paragraph.** Two to four sentences at the top
-  of the version section saying why this version shipped and what a teammate
-  will notice in their day. Write it in the cut PR, right after `cut --confirm`
+- **Open with a short plain paragraph, with no label.** Two to four sentences
+  at the top of the version section saying why this version shipped and what a
+  teammate will notice in their day. It just says the thing: no "In short:",
+  "Summary:" or other lead-in (Max, 2026-10-15, for every repo). Write it in the cut PR, right after `cut --confirm`
   moves the lines into the dated section. `publish` sends the whole section, so
   the paragraph becomes the top of the GitHub Release.
 - **Each line answers "what is different for me?"** Start from the person's
@@ -60,7 +61,7 @@ A version section then looks like this:
 ```markdown
 ## [0.3.0] - 2026-10-08
 
-In short: Gus now updates itself when you open Claude, so you stop running
+Gus now updates itself when you open Claude, so you stop running
 /update-gus by hand. Slack search moved fully into Uplink, so every search sees
 the same history.
 
@@ -93,7 +94,7 @@ gustav checkout.
 # 1. in a worktree from origin/main
 python3 "$GUSTAV/scripts/release.py" --repo . plan           # the next version and its notes
 python3 "$GUSTAV/scripts/release.py" --repo . cut --confirm  # bump VERSION, date the [Unreleased] lines
-# write the "In short" paragraph, open a PR to main, review, merge it
+# write the opening paragraph (no label), open a PR to main, review, merge it
 # 2. from a clean detached checkout of the merged commit
 python3 "$GUSTAV/scripts/release.py" --repo . publish --confirm --target <sha>
 ```
