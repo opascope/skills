@@ -1,13 +1,22 @@
 # <epic name>
 
+<!-- The name is a short plain description of what this delivers, not a code name. Write the
+sections below so a company leader outside the code understands them on their own: outcomes, not
+mechanisms; explain or drop any internal term; an id may go in parentheses after a description. -->
+
 beads: <id>
+plan: needs-planning
 
 <!-- Agent layer. `beads:` names the Beads epic, and that epic's external ref points back at this
-file. Tasks live in Beads as children of that epic, never as a list here. -->
+file. Tasks live in Beads as children of that epic, never as a list here. `plan:` is the planning
+gate (planned, needs-planning or not-planned); it may be left out when the Beads epic carries a
+`plan:<state>` label. -->
 
 ## Why
 
 ## Outcome
+
+<!-- What changes for the team or for clients when this ships. -->
 
 ## Inputs and outputs
 
@@ -15,7 +24,7 @@ file. Tasks live in Beads as children of that epic, never as a list here. -->
 
 ## Success criteria
 
-<!-- What is true when the epic is done. -->
+<!-- What is true when the epic is done, as outcomes someone can observe. -->
 
 ## Exit criteria
 

@@ -1,6 +1,6 @@
 {
   "visibility": "public",
-  "layout_version": 1,
+  "layout_version": 2,
   "tier": "small",
   "base_branch": "main",
   "root_allow": [

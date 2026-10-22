@@ -71,6 +71,13 @@ def is_generated(text: str) -> bool:
     return bool(GENERATED_RX.search(head))
 
 
+def generated_id(text: str) -> Optional[str]:
+    """The generator id in a file's `manage-docs:generated` header, or None when it carries none."""
+    head = "\n".join(text.splitlines()[:3])
+    m = GENERATED_RX.search(head)
+    return m.group(1) if m else None
+
+
 def generated_header(gen_id: str, content: str) -> str:
     """Header line for a manage-docs generated markdown file; the hash covers `content`."""
     return f"<!-- manage-docs:generated id={gen_id} hash={sha256_text(content)} (never edit by hand) -->\n"
@@ -213,8 +220,13 @@ def run_review(root: Path, packet: dict, reviewer_cmd: List[str], timeout: int =
                                   covered=", ".join(packet["covered"]) or "(none)", body=packet["body"])
     dec = json.JSONDecoder()
     for _ in range(2):
-        p = subprocess.run(reviewer_cmd, input=prompt, cwd=root, capture_output=True, text=True,
-                           timeout=timeout)  # stdin, never argv: a long doc body hits E2BIG
+        try:
+            p = subprocess.run(reviewer_cmd, input=prompt, cwd=root, capture_output=True, text=True,
+                               timeout=timeout)  # stdin, never argv: a long doc body hits E2BIG
+        except subprocess.TimeoutExpired as exc:
+            # A hung reviewer ends the claim checks cleanly, with no retry, so one review costs
+            # at most `timeout` seconds instead of crashing the run.
+            raise ReviewUnavailable(f"reviewer `{' '.join(reviewer_cmd)}` gave no answer in {timeout}s") from exc
         found = None
         for i, ch in enumerate(p.stdout):
             if ch == "{":
