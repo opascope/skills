@@ -7,10 +7,16 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 from typing import List, Optional
 
 from docslib import globs
+
+# The layout the vendored tools write (docs.json `layout_version`). A new repo is seeded at it; an
+# older repo is brought up by `docs.py upgrade`, which runs each plugin's steps (layout 2: the
+# roadmap is docs/roadmap/README.md, no longer ROADMAP.md). A docs.json without the field is layout 1.
+LAYOUT_VERSION = 2
 
 DEFAULTS = {
     "visibility": "private",
@@ -28,6 +34,11 @@ DEFAULTS = {
     "frontmatter_exempt": [],
     "router": {"mode": "block"},
     "generators": [],
+    "docs_map": "docs/README.md",
+    # Named exceptions to the docs/ folder standard (globs under docs/). Everything else under docs/ sits
+    # in a standard folder (STANDARD_DOC_DIRS), is docs/README.md or the docs map, or is a generated doc.
+    "docs_allow": [],
+    "docs_layout_overage": "fail",
     "records_window_days": 30,
     "receipt_max_age_days": 30,
     "verify_budget_per_run": 10,
@@ -37,7 +48,20 @@ DEFAULTS = {
     "deny_terms_file": None,
     "inventory_exclude": [],
     "roadmap": {},
+    # X12: entry-point docs (no frontmatter, so receipt staleness never covers them). Repo-wide,
+    # WARN-only signals flag one unchanged longer than entrypoint_max_age_days, or naming a dead path.
+    "entrypoints": ["*.md", "docs/README.md", "apps/*/README.md", "packages/*/README.md"],
+    "entrypoint_max_age_days": 180,
+    # Where the vendored engine lives: tools/docs, unless the repo's own tree already owns
+    # tools/ (a mirror of another project whose tools/ is code). Set through the site.json seed.
+    "vendor_dir": "tools/docs",
 }
+
+DEFAULT_VENDOR_DIR = "tools/docs"
+
+# The folders a hand-written doc under docs/ may sit in (references/standard.md). Anything else is a
+# placement violation unless docs_allow names it.
+STANDARD_DOC_DIRS = ("roadmap", "architecture", "guides", "runbooks", "rules", "generated")
 
 # Paths that never leave the machine in a public repo (contract section 7).
 LOCAL_ONLY = ["work/", "docs/roadmap/", ".beads/"]
@@ -72,9 +96,48 @@ def load(root: Path) -> Optional[dict]:
     return merged(raw)
 
 
+# Top-level folders the engine may never be vendored into (or under): vendor() clears its folder
+# before copying, so these would lose real data. A one-segment folder is refused too, so the
+# engine always sits at least one level down (tools/docs, opascope/tools/docs).
+# Each segment is shell-safe: the folder is written unquoted into workflow and git-hook commands.
+SAFE_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
+RESERVED_TOP = {".git", ".github", ".beads", ".claude", ".agents", ".husky", "docs", "work",
+                "changelog.d", "node_modules", "src", "scripts", "tests"}
+
+
+def vendor_dir(cfg: Optional[dict]) -> str:
+    """The vendored engine's folder, repo-relative, no trailing slash. Refuses an absolute path
+    or one that climbs out of the repo."""
+    raw = (cfg or {}).get("vendor_dir")
+    if raw is None:
+        return DEFAULT_VENDOR_DIR
+    if not isinstance(raw, str):
+        raise ConfigError("docs.json vendor_dir must be a string")
+    vd = raw.strip().rstrip("/")
+    parts = vd.split("/")
+    if (not vd or vd.startswith("/") or "\\" in vd or any(c.isspace() for c in vd)
+            or any(p in ("", ".", "..") or not SAFE_SEGMENT.fullmatch(p) for p in parts)
+            or parts[0].lower() in RESERVED_TOP or len(parts) == 1
+            # `python3 -vendor/docs/docs.py` would read the folder as an option, so every generated
+            # hook and router command would fail
+            or parts[0].startswith("-")):
+        raise ConfigError(f"docs.json vendor_dir must be a plain relative folder, not {raw!r}")
+    return vd
+
+
+def vendor_dir_of(root: Path) -> str:
+    """vendor_dir from the repo's docs.json, the default when it has none or it is unreadable."""
+    try:
+        return vendor_dir(load(root))
+    except ConfigError:
+        return DEFAULT_VENDOR_DIR
+
+
 def excludes(cfg: dict) -> List[str]:
-    """doc_exclude unioned with inventory_exclude (contract RE1)."""
-    return list(cfg.get("doc_exclude", [])) + list(cfg.get("inventory_exclude", []))
+    """doc_exclude unioned with inventory_exclude (contract RE1), plus the vendored engine's folder."""
+    out = list(cfg.get("doc_exclude", [])) + list(cfg.get("inventory_exclude", []))
+    vd = vendor_dir(cfg) + "/**"
+    return out if vd in out else out + [vd]
 
 
 def is_doc(cfg: dict, path: str) -> bool:
@@ -84,6 +147,25 @@ def is_doc(cfg: dict, path: str) -> bool:
 def placed(cfg: dict, path: str) -> bool:
     """True when a doc path is allowed where it is (root_allow or md_allow)."""
     return globs.any_match(cfg.get("root_allow", []), path) or globs.any_match(cfg.get("md_allow", []), path)
+
+
+def in_standard_docs_layout(cfg: dict, path: str, generated: bool = False) -> bool:
+    """True when a docs/ path sits where the standard puts it: inside a standard folder, or it is
+    docs/README.md, the docs map, the router fragment, a generated doc, or a named docs_allow exception.
+    Paths outside docs/ are not this rule's business."""
+    if not path.startswith("docs/"):
+        return True
+    rest = path[len("docs/"):]
+    if path in ("docs/README.md", docs_map_path(cfg), ROUTER_FRAGMENT) or generated:
+        return True
+    if "/" in rest and rest.split("/", 1)[0] in STANDARD_DOC_DIRS:
+        return True
+    return globs.any_match(cfg.get("docs_allow") or [], path)
+
+
+def is_entrypoint(cfg: dict, path: str) -> bool:
+    """A doc the entrypoint check watches for staleness and dead path references (X12)."""
+    return globs.any_match(cfg.get("entrypoints") or [], path)
 
 
 def is_public(cfg: dict) -> bool:
@@ -98,11 +180,33 @@ def is_record(path: str) -> bool:
     return path.startswith("work/")
 
 
+# The repo-relative path the built-in `docs-map` generator writes. docs/README.md by default, so a
+# repo that does not set `docs_map` keeps its generated map there; a repo with a hand-written
+# docs/README.md points `docs_map` at another path (e.g. docs/DOCS-MAP.md) to protect the README.
+DEFAULT_DOCS_MAP = "docs/README.md"
+
+
+def docs_map_path(cfg: dict) -> str:
+    return cfg.get("docs_map") or DEFAULT_DOCS_MAP
+
+
+# The docs router fragment init writes for repos that compose AGENTS.md / CLAUDE.md from docs/agent/
+# fragments: its text lands in the ROOT files, so its links are root-relative and it carries no frontmatter.
+ROUTER_FRAGMENT = "docs/agent/_docs-router.md"
+
+
+def link_base(path: str) -> str:
+    """The path a doc's relative links resolve from: the doc itself, or the repo root for the router fragment."""
+    return "AGENTS.md" if path == ROUTER_FRAGMENT else path
+
+
 def frontmatter_required(cfg: dict, path: str) -> bool:
     """Hand-written docs in docs/ outside roadmap/ and generated/ carry frontmatter (7.1)."""
     if not path.startswith("docs/") or path.startswith(("docs/roadmap/", "docs/generated/")):
         return False
-    if path == "docs/README.md":
+    # The README and the router fragment are READMEs, not ours to parse; the generated docs map
+    # (wherever docs_map points it) carries a generated header, not frontmatter.
+    if path in ("docs/README.md", ROUTER_FRAGMENT, docs_map_path(cfg)):
         return False
     if not path.endswith((".md", ".mdx")):
         return False
@@ -137,7 +241,9 @@ def loosenings(old_raw: Optional[dict], new_raw: Optional[dict]) -> List[str]:
             out.append(f"caps.{cap} raised {old['caps'].get(cap)} -> {new['caps'].get(cap)}")
     if new["caps"].get("overage") == "warn" and old["caps"].get("overage") != "warn":
         out.append("caps.overage set to warn")
-    for key in ("root_allow", "md_allow", "doc_exclude", "frontmatter_exempt", "inventory_exclude"):
+    if new.get("docs_layout_overage") == "warn" and old.get("docs_layout_overage") != "warn":
+        out.append("docs_layout_overage set to warn")
+    for key in ("root_allow", "md_allow", "doc_exclude", "frontmatter_exempt", "inventory_exclude", "docs_allow"):
         for x in _added(old.get(key), new.get(key)):
             out.append(f"{key} entry added: {x}")
     for key in ("doc_globs", "read_test"):
@@ -156,6 +262,8 @@ def loosenings(old_raw: Optional[dict], new_raw: Optional[dict]) -> List[str]:
     # ER14 (D5)
     for x in _removed(old.get("generators"), new.get("generators")):
         out.append(f"generators entry removed: {json.dumps(x, sort_keys=True)}")
+    if vendor_dir(old) != vendor_dir(new):
+        out.append(f"vendor_dir changed {vendor_dir(old)} -> {vendor_dir(new)}")
     if old.get("reviewer_cmd") != new.get("reviewer_cmd"):
         out.append("reviewer_cmd changed")
     if (old.get("router") or {}).get("mode") != (new.get("router") or {}).get("mode"):

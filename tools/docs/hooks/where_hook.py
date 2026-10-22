@@ -3,7 +3,7 @@
 
 WARNS (systemMessage) when a doc is written outside the docs layout (`doc_globs` but not in
 `md_allow` / `root_allow`). It never denies: CI check 1 is the enforcement, and Codex has no hook.
-Silent in repos without docs.json. Vendored at tools/docs/hooks/where_hook.py.
+Silent in repos without docs.json. Vendored at <vendor_dir>/hooks/where_hook.py (tools/docs by default).
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def main() -> int:
     rc, hits = checks.where(Path(rel).stem.replace("-", " ").replace("_", " "))
     hint = f" Suggested: {hits[0][1]}." if rc == 0 else ""
     msg = (f"manage-docs: {rel} is outside the docs layout (docs.json md_allow/root_allow); CI check 1 will "
-           f"fail it. Run `python3 tools/docs/docs.py where \"<what it is>\"` for the right place.{hint}")
+           f"fail it. Run `python3 {config.vendor_dir(cfg)}/docs.py where \"<what it is>\"` for the right place.{hint}")
     print(json.dumps({"systemMessage": msg}))
     return 0
 

@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from docslib import config, generate, receipts, routine, site
+from docslib import checks, config, generate, receipts, routine, site
 
 VENDOR_FILES = ["docs.py", "roadmap.py", "engine/migrate.py", "engine/INTERFACE.md", "hooks/where_hook.py"]
 VENDOR_GLOBS = ["docslib/*.py", "templates/**/*"]
@@ -34,7 +34,7 @@ WORKFLOW_SRC = "templates/workflows/docs-verify.yml"
 WORKFLOW_DST = ".github/workflows/docs-verify.yml"
 GITHOOKS = ["pre-commit", "commit-msg", "pre-push"]
 ROUTER_OPEN, ROUTER_CLOSE = "<!-- manage-docs:router -->", "<!-- /manage-docs:router -->"
-ROUTER_FRAGMENT = "docs/agent/_docs-router.md"
+ROUTER_FRAGMENT = config.ROUTER_FRAGMENT
 RULESET_NAME = "manage-docs verify"
 ACTIONS_APP_ID = 15368  # GitHub Actions integration (S1 probe): pins the required check to Actions
 REQUIRED_CHECK = "docs-verify"
@@ -46,6 +46,19 @@ HEARTBEAT_BODY = "last_run: never\nstatus: none\nlast_success: never\n"
 # Seed-only (never written to docs.json); a repo with no seed value takes the default.
 DEFAULT_PYTHON = "3.12"
 PYTHON_PLACEHOLDER = "__PYTHON_VERSION__"
+# The jobs' runs-on per repo, written verbatim after `runs-on: ` (a label, a flow list, or a
+# ${{ }} expression). Seed-only like python_version. A repo with no seed runs on the org's
+# self-hosted pool, never a GitHub-hosted runner; a repo allowed on hosted runners says so in
+# its own seed.
+DEFAULT_RUNS_ON = "[self-hosted, ci-group]"
+RUNS_ON_PLACEHOLDER = "__RUNS_ON__"
+VENDOR_PLACEHOLDER = "__VENDOR_DIR__"
+# Folders whose Markdown does not make docs-verify run its full check (site.json seed
+# `docs_verify_skip`, each one "<folder>/**"). Seed-only like runs_on. Each must already be in the
+# repo's docs.json inventory_exclude, so no check reads a file there; a repo with no seed value skips
+# nothing beyond non-docs files.
+SKIP_PLACEHOLDER = "__DOCS_VERIFY_SKIP__"
+SKIP_GLOB = re.compile(r"[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*/\*\*")
 
 SEEDS = site.get("seeds")  # repo slug -> init seed; the home repo's site.json (never vendored)
 
@@ -97,12 +110,49 @@ def sha256_file(fp: Path) -> str:
 
 
 def skill_sha(skill_root: Path) -> str:
-    return sh(["git", "rev-parse", "HEAD"], cwd=skill_root).stdout.strip()
+    """The sha a PIN records: the last commit that changed the vendored skill (routine.skill_tree_sha),
+    the same value the daily run compares against, so an unrelated commit never reads as behind."""
+    return routine.skill_tree_sha(skill_root) or sh(["git", "rev-parse", "HEAD"], cwd=skill_root).stdout.strip()
+
+
+def repo_vendor_dir(repo: Path) -> str:
+    """Where this repo vendors the engine: docs.json's vendor_dir once it exists, before that the
+    repo's site.json seed (`vendor_dir`), else tools/docs."""
+    repo = Path(repo)
+    if (repo / "docs.json").exists():
+        return config.vendor_dir_of(repo)
+    return config.vendor_dir({"vendor_dir": SEEDS.get(repo_slug(repo), {}).get("vendor_dir")})
+
+
+def unvendored_files(dst: Path) -> Optional[List[str]]:
+    """Files under dst that its PIN does not list (bytecode caches aside), or None when dst does not hold an
+    engine this skill vendored (checks.vendored_engine: a valid PIN whose every file is present and matches
+    its hash, no symlinks). A PIN-shaped file with wrong hashes is never proof enough to clear a folder."""
+    pin = checks.vendored_engine(dst)
+    if pin is None:
+        return None
+    listed = set(pin["files"]) | {"PIN"}
+    return sorted(rel for rel in (fp.relative_to(dst).as_posix() for fp in dst.rglob("*")
+                                  if fp.is_file() or fp.is_symlink())
+                  if rel not in listed and "__pycache__/" not in rel and not rel.endswith(".pyc"))
 
 
 def vendor(skill_root: Path, repo: Path, sha: Optional[str] = None) -> dict:
     skill_root, repo = Path(skill_root), Path(repo)
-    dst = repo / "tools" / "docs"
+    vd = repo_vendor_dir(repo)
+    dst = repo / vd
+    # The folder must stay inside the checkout: no part of the path may be a symlink.
+    for depth in range(1, len(vd.split("/")) + 1):
+        part = repo.joinpath(*vd.split("/")[:depth])
+        if part.is_symlink():
+            raise InitError(f"{part.relative_to(repo)} is a symlink; vendor_dir must be a real folder in the repo")
+    if dst.exists() and any(dst.iterdir()):
+        stray = unvendored_files(dst)
+        if stray is None or stray:
+            # Only a folder this skill vendored before is ever cleared: a valid PIN lists every file.
+            what = "no valid PIN" if stray is None else "files its PIN does not list: " + ", ".join(stray[:5])
+            raise InitError(f"{dst.relative_to(repo)} has {what}; it is not a vendored engine, so it is "
+                            "never cleared. Pick an empty vendor_dir.")
     if dst.exists():
         for fp in sorted(dst.rglob("*"), reverse=True):
             if fp.is_file() or fp.is_symlink():
@@ -120,7 +170,8 @@ def vendor(skill_root: Path, repo: Path, sha: Optional[str] = None) -> dict:
 
 def pin_proof(skill_root: Path, repo: Path) -> Tuple[bool, str]:
     """LOCAL trust-root proof for the PR body (contract section 2): ancestor + per-file hashes."""
-    pin = json.loads((Path(repo) / "tools" / "docs" / "PIN").read_text(encoding="utf-8"))
+    vd = repo_vendor_dir(repo)
+    pin = json.loads((Path(repo) / vd / "PIN").read_text(encoding="utf-8"))
     lines = [f"skill_sha {pin['skill_sha']}"]
     ok = True
     # MANAGE_DOCS_TRUST_REF is a test seam only (fixture suites run on unmerged commits)
@@ -132,11 +183,11 @@ def pin_proof(skill_root: Path, repo: Path) -> Tuple[bool, str]:
     for rel, want in sorted(pin["files"].items()):
         src = sources.get(rel, Path(skill_root) / rel)
         have = sha256_file(src) if src.is_file() else "missing"
-        vend = Path(repo) / "tools" / "docs" / rel
+        vend = Path(repo) / vd / rel
         vhave = sha256_file(vend) if vend.is_file() else "missing"
         good = have == want == vhave
         ok &= good
-        lines.append(f"{'ok ' if good else 'BAD'} {want[:16]} tools/docs/{rel}")
+        lines.append(f"{'ok ' if good else 'BAD'} {want[:16]} {vd}/{rel}")
     return ok, "\n".join(lines)
 
 
@@ -161,6 +212,47 @@ UPDATE_BEFORE_MERGE = set(site.get("update_before_merge"))
 SEED_ALIASES = dict(site.get("seed_aliases"))
 
 
+def slug_paths(slug: str) -> Dict[str, Path]:
+    """Every machine-local path the routine keys by a repo's slug (routine.py: state_dir, private_dir,
+    worktree_for, and the active-migration marker skip_reason reads), plus the engine's publish, close and
+    rollback journals (migrate.journal; Codex P2 on #1124). The worktree comes first, so a refused
+    `git worktree move` leaves every other path where it was."""
+    return {"worktree": routine.data_home() / "worktrees" / slug,
+            "state": routine.data_home() / "state" / slug,
+            "private": routine.data_home() / "private" / slug,
+            "active marker": routine.config_home() / "active" / slug,
+            "journals": routine.config_home() / slug}
+
+
+def move_slug_paths(olds: List[str], new: str, checkout: str, done: List[str]) -> None:
+    """Carry a renamed enrollment's local paths to its new slug: moves only, never a merge or a delete.
+    Every path is checked first: when a legacy slug's path and the new slug's path both exist, or two legacy
+    slugs would land on one path, it refuses before anything moves or repos.json changes (Codex P2s on
+    #1118)."""
+    dst, moves, clash = slug_paths(new), [], []
+    for kind, target in dst.items():
+        srcs = [slug_paths(o)[kind] for o in olds if os.path.lexists(slug_paths(o)[kind])]
+        if srcs and os.path.lexists(target):
+            clash.append(f"{kind}: {', '.join(map(str, srcs))} and {target}")
+        elif len(srcs) > 1:
+            clash.append(f"{kind}: {', '.join(map(str, srcs))} would all move to {target}")
+        elif srcs:
+            moves.append((kind, srcs[0], target))
+    if clash:
+        raise InitError("both the legacy and the new slug's local paths exist; reconcile them by hand (nothing "
+                        "was moved or merged, repos.json is unchanged):\n  " + "\n  ".join(clash))
+    for kind, src, target in moves:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if kind == "worktree":
+            p = sh(["git", "worktree", "move", str(src), str(target)], cwd=checkout, check=False)
+            if p.returncode != 0:
+                raise InitError(f"git worktree move {src} {target} failed ({p.stderr.strip()[:200]}); "
+                                "nothing else was moved and repos.json is unchanged")
+        else:
+            src.rename(target)
+        done.append(f"{kind} moved: {src} -> {target}")
+
+
 def repo_slug(repo: Path) -> str:
     n = nwo(repo)
     if n in SEED_ALIASES:
@@ -169,12 +261,45 @@ def repo_slug(repo: Path) -> str:
 
 
 def render_workflow(skill_root: Path, repo: Path) -> str:
-    """The docs-verify workflow for this repo: the template with its python-version filled from the seed."""
+    """The docs-verify workflow for this repo: the template with its python-version, runs-on and
+    docs_verify_skip filled from the seed, and its vendor folder from docs.json."""
     text = (Path(skill_root) / WORKFLOW_SRC).read_text(encoding="utf-8")
-    ver = SEEDS.get(repo_slug(repo), {}).get("python_version", DEFAULT_PYTHON)
-    out = text.replace(PYTHON_PLACEHOLDER, ver)
+    seed = SEEDS.get(repo_slug(repo), {})
+    ver = seed.get("python_version", DEFAULT_PYTHON)
+    runs_on = seed.get("runs_on", DEFAULT_RUNS_ON)
+    if not isinstance(runs_on, str) or not runs_on.strip() or "\n" in runs_on:
+        raise InitError(f"site.json seed runs_on must be one non-empty line: {runs_on!r}")
+    out = (text.replace(PYTHON_PLACEHOLDER, ver).replace(RUNS_ON_PLACEHOLDER, runs_on)
+           .replace(VENDOR_PLACEHOLDER, repo_vendor_dir(repo))
+           .replace(SKIP_PLACEHOLDER, " ".join(docs_verify_skip(repo, seed))))
     if PYTHON_PLACEHOLDER in out or ver not in out:
         raise InitError(f"{WORKFLOW_SRC}: python-version placeholder not rendered")
+    if RUNS_ON_PLACEHOLDER in out or f"runs-on: {runs_on}" not in out:
+        raise InitError(f"{WORKFLOW_SRC}: runs-on placeholder not rendered")
+    if VENDOR_PLACEHOLDER in out:
+        raise InitError(f"{WORKFLOW_SRC}: vendor-dir placeholder not rendered")
+    if SKIP_PLACEHOLDER in out:
+        raise InitError(f"{WORKFLOW_SRC}: docs_verify_skip placeholder not rendered")
+    return out
+
+
+def docs_verify_skip(repo: Path, seed: dict) -> List[str]:
+    """The seed's `docs_verify_skip` folders (no trailing slash) for the workflow's scope step. Each
+    entry is "<folder>/**" and must already be in the repo's inventory_exclude (docs.json, or the seed's
+    before PR 1 writes docs.json): the scope step may only skip what no docs check reads."""
+    raw = seed.get("docs_verify_skip", [])
+    if not isinstance(raw, list) or not all(isinstance(g, str) for g in raw):
+        raise InitError(f"site.json seed docs_verify_skip must be a list of \"<folder>/**\" globs: {raw!r}")
+    cfg = config.load(Path(repo)) if (Path(repo) / "docs.json").is_file() else seed
+    excluded = set((cfg or {}).get("inventory_exclude") or [])
+    out = []
+    for glob in raw:
+        if not SKIP_GLOB.fullmatch(glob) or any(p in (".", "..") for p in glob.split("/")):
+            raise InitError(f"site.json seed docs_verify_skip entries are \"<folder>/**\" globs, not {glob!r}")
+        if glob not in excluded:
+            raise InitError(f"site.json seed docs_verify_skip {glob!r} is not in the repo's inventory_exclude, "
+                            "so the docs checks still read it")
+        out.append(glob[:-3])
     return out
 
 
@@ -194,7 +319,7 @@ def unseeded_base(repo: Path, seed: Optional[dict] = None) -> str:
 def seed_cfg(repo: Path, tier: Optional[str] = None) -> dict:
     slug = repo_slug(repo)
     seed = SEEDS.get(slug, {})
-    raw: dict = {"visibility": seed.get("visibility", "private"), "layout_version": 1,
+    raw: dict = {"visibility": seed.get("visibility", "private"), "layout_version": config.LAYOUT_VERSION,
                  "tier": tier or seed.get("tier", "full")}
     raw["base_branch"] = unseeded_base(repo, seed)
     d = config.DEFAULTS
@@ -202,9 +327,11 @@ def seed_cfg(repo: Path, tier: Optional[str] = None) -> dict:
         raw["root_allow"] = list(d["root_allow"]) + seed["root_allow+"]
     if "md_allow+" in seed:
         raw["md_allow"] = list(d["md_allow"]) + seed["md_allow+"]
-    for k in ("router", "generators", "inventory_exclude"):
+    for k in ("router", "generators", "inventory_exclude", "doc_globs", "doc_exclude", "entrypoints"):
         if k in seed:
             raw[k] = seed[k]
+    if "vendor_dir" in seed:
+        raw["vendor_dir"] = config.vendor_dir({"vendor_dir": seed["vendor_dir"]})
     if "caps" in seed:
         raw["caps"] = dict(d["caps"], **seed["caps"])
     return raw
@@ -218,7 +345,7 @@ def preflight(repo: Path, cfg: dict, runtime: str, reviewer: Optional[List[str]]
     lines: List[str] = []
     go = True
     name = nwo(repo)
-    slug = name.split("/")[-1] if name else repo.name
+    slug = repo_slug(repo)  # the seed slug, so an aliased repo reads its own site.json settings
     # before PR 1 there is no docs.json and cfg holds defaults; the base comes from the seed or GitHub
     base = cfg.get("base_branch", "main") if (repo / "docs.json").is_file() else unseeded_base(repo)
 
@@ -295,7 +422,8 @@ def preflight(repo: Path, cfg: dict, runtime: str, reviewer: Optional[List[str]]
     if config.is_public(cfg):
         from docslib import namescan
         if not namescan.load_list(namescan.default_list_path(cfg)):
-            bad("deny-term list missing for a public repo. Run: python3 tools/docs/docs.py scan-deny --rebuild")
+            bad("deny-term list missing for a public repo. Run: "
+                f"python3 {config.vendor_dir(cfg)}/docs.py scan-deny --rebuild")
         else:
             lines.append("ok    deny-term list present")
     return go, lines
@@ -317,7 +445,7 @@ def stage_pr1(skill_root: Path, repo: Path, tier: Optional[str], decision: Optio
     repo = Path(repo)
     done = []
     pin = vendor(skill_root, repo)
-    done.append(f"tools/docs/ vendored ({len(pin['files'])} files, PIN {pin['skill_sha'][:12]})")
+    done.append(f"{repo_vendor_dir(repo)}/ vendored ({len(pin['files'])} files, PIN {pin['skill_sha'][:12]})")
     wf = repo / WORKFLOW_DST
     wf.parent.mkdir(parents=True, exist_ok=True)
     wf.write_text(render_workflow(skill_root, repo), encoding="utf-8")
@@ -342,14 +470,16 @@ def stage_pr1(skill_root: Path, repo: Path, tier: Optional[str], decision: Optio
 
 
 def router_text(cfg: dict, repo: Optional[Path] = None) -> str:
+    docs_map = config.docs_map_path(cfg)
     lines = ["## Docs and records", "",
-             "- Docs map: [docs/README.md](docs/README.md), one line per doc with its receipt status."]
+             f"- Docs map: [{docs_map}]({docs_map}), one line per doc with its receipt status."]
     if not config.is_public(cfg):
         if repo is None or (Path(repo) / "docs" / "roadmap").is_dir():
             lines.append("- Roadmap and decisions: [docs/roadmap/](docs/roadmap/).")
         lines.append("- Records (handoffs, runs, evidence, audits): [work/](work/README.md).")
-    lines += ["- Where does a new file go? `python3 tools/docs/docs.py where \"<what it is>\"`.",
-              "- Before a PR: `python3 tools/docs/docs.py check`."]
+    vd = config.vendor_dir(cfg)
+    lines += [f"- Where does a new file go? `python3 {vd}/docs.py where \"<what it is>\"`.",
+              f"- Before a PR: `python3 {vd}/docs.py check`."]
     return "\n".join(lines)
 
 
@@ -393,37 +523,63 @@ def install_githooks(skill_root: Path, repo: Path, cfg: dict, defer: Optional[li
     names = ["pre-commit"] + (["commit-msg", "pre-push"] if config.is_public(cfg) else [])
     out = []
     husky = repo / ".husky"
+    vd = config.vendor_dir(cfg)
+    marker = f"{vd}/docs.py hook"
     for name in names:
-        line = f'python3 tools/docs/docs.py hook {name} "$@" || exit $?'
+        line = f'python3 {vd}/docs.py hook {name} "$@" || exit $?'
         if name == "pre-commit" and husky.is_dir():
             fp = husky / "pre-commit"
         else:
             fp = repo / ".githooks" / name
         rel = fp.relative_to(repo).as_posix()
         if fp.exists() and defer is not None and is_tracked(repo, rel):
-            if "tools/docs/docs.py hook" not in fp.read_text(encoding="utf-8"):
+            if marker not in fp.read_text(encoding="utf-8"):
                 defer.append(f"docs hook line in {rel}")
             continue
         if fp.exists():
             cur = fp.read_text(encoding="utf-8")
-            if "tools/docs/docs.py hook" not in cur:
-                fp.write_text(cur.rstrip("\n") + "\n" + line + "\n", encoding="utf-8")
+            if marker not in cur:
+                # A hook from an earlier vendor_dir: repoint its managed command, never add a second.
+                # Only a command proven to be an earlier vendored engine's counts: a manage-docs PIN beside
+                # it vouches for docs.py, or it names the default tools/docs and that script is gone. A
+                # repo's own docs.py hook (scripts/docs.py, or tools/docs/docs.py in a repo that owns
+                # tools/) is left as it is.
+                old = re.compile(rf"(python3 )(\S+)(/docs\.py hook {re.escape(name)})(?=\s|$)")
+                new = old.sub(lambda m: m.group(1) + vd + m.group(3)
+                              if (checks.pin_vouches_for(Path(repo) / m.group(2), "docs.py")
+                                  or (m.group(2) == config.DEFAULT_VENDOR_DIR
+                                      and not (Path(repo) / m.group(2) / "docs.py").exists()))
+                              else m.group(0), cur)
+                fp.write_text(new if new != cur else cur.rstrip("\n") + "\n" + line + "\n", encoding="utf-8")
         else:
             fp.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(Path(skill_root) / "templates" / "githooks" / name, fp)
+            template = (Path(skill_root) / "templates" / "githooks" / name).read_text(encoding="utf-8")
+            fp.write_text(template.replace("tools/docs/", vd + "/"), encoding="utf-8")
         fp.chmod(0o755)
         out.append(fp.relative_to(repo).as_posix())
     return out
 
 
 def install_placement_hook(repo: Path, defer: Optional[list] = None) -> Optional[str]:
+    vd = repo_vendor_dir(repo)
     fp = Path(repo) / ".claude" / "settings.json"
     if fp.exists() and defer is not None and is_tracked(repo, ".claude/settings.json"):
         defer.append(".claude/settings.json placement warn hook")
         return None
     data = json.loads(fp.read_text(encoding="utf-8")) if fp.exists() else {}
-    cmd = "python3 tools/docs/hooks/where_hook.py"
+    cmd = f"python3 {vd}/hooks/where_hook.py"
     pre = data.setdefault("hooks", {}).setdefault("PreToolUse", [])
+    stale = re.compile(r"python3 (\S+)/hooks/where_hook\.py")
+    for e in pre:  # a placement hook from an earlier vendor_dir is repointed, never doubled
+        for h in e.get("hooks", []):
+            m = stale.fullmatch(h["command"]) if isinstance(h.get("command"), str) else None
+            # only a command proven to be an earlier vendored engine's is repointed: a manage-docs PIN in
+            # its folder lists the hook and its hash matches, or its script is gone. A repo's own
+            # where_hook (scripts/hooks/where_hook.py, or tools/docs/... in a repo that owns tools/) is
+            # left as it is, whatever its path.
+            if m and (checks.pin_vouches_for(Path(repo) / m.group(1), "hooks/where_hook.py")
+                      or not (Path(repo) / m.group(1) / "hooks" / "where_hook.py").exists()):
+                h["command"] = cmd
     if not any(cmd == h.get("command") for e in pre for h in e.get("hooks", [])):
         pre.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": cmd}]})
     fp.parent.mkdir(parents=True, exist_ok=True)
@@ -455,8 +611,11 @@ def stage_migration(skill_root: Path, repo: Path, plugins=()) -> List[str]:
     done += [d for d in [install_router(repo, cfg, deferred)] if d]
     done += install_githooks(skill_root, repo, cfg, deferred)
     done += [d for d in [install_placement_hook(repo, deferred)] if d]
-    generate.run(repo, cfg, builtin_only=True)
-    done.append("docs/README.md" + ("" if config.is_public(cfg) else " and work/README.md") + " generated")
+    try:
+        generate.run(repo, cfg, builtin_only=True)
+    except generate.GenerateError as exc:
+        raise InitError(str(exc))
+    done.append(config.docs_map_path(cfg) + ("" if config.is_public(cfg) else " and work/README.md") + " generated")
     if deferred:
         done.append("deferred to `docs.py init --stage wire` in a small PR after the migration PR merges "
                     "(the migration PR must leave tracked files byte-identical): " + "; ".join(deferred))
@@ -492,6 +651,12 @@ def main_checkout(repo: Path) -> Path:
     common = Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
     if common is not None and common.name == ".git":
         return common.parent.resolve()
+    if common is not None:
+        # a submodule (or a linked worktree of one): the shared .git/modules/<name> names its main checkout in
+        # core.worktree; the same rule as the engine's main_checkout (Codex P2 PRRT_kwDOSy0wdc6pEMov)
+        w = sh(["git", "config", "--file", str(common / "config"), "core.worktree"], cwd=repo, check=False)
+        if w.returncode == 0 and w.stdout.strip():
+            return (common / w.stdout.strip()).resolve()
     return Path(repo).resolve()
 
 
@@ -506,11 +671,9 @@ def active_default_hooks(repo: Path) -> List[str]:
 
 
 def label_description(cfg: dict) -> str:
-    """The approval label's description; a public repo never names the owner (no personal names in public)."""
-    owner = site.get("owner")
-    if config.is_public(cfg) or not owner:
-        return "manage-docs daily PR awaiting the owner's approval"
-    return f"manage-docs daily PR awaiting {owner}'s approval"
+    """The marker on the one daily docs PR. It is review-gated like any agent PR, not
+    owner-gated, so the description names no person and makes no approval claim."""
+    return "manage-docs daily docs maintenance PR"
 
 
 def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None) -> Tuple[bool, List[str]]:
@@ -572,9 +735,29 @@ def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None)
     reposj = routine.config_home() / "repos.json"
     reposj.parent.mkdir(parents=True, exist_ok=True)
     entries = json.loads(reposj.read_text(encoding="utf-8")) if reposj.exists() else []
-    slug = name.split("/")[-1] if name else repo.name
-    if not any(e.get("slug") == slug for e in entries):
-        entries.append({"slug": slug, "path": str(main_checkout(repo)), "base_branch": base})
+    slug = repo_slug(repo)  # the seed slug (opascope/skills -> opascope-skills), the key site.json uses
+    path = str(main_checkout(repo))
+    # an entry enrolled before the alias fix carries the GitHub name ("skills"): match it by its checkout
+    # or by that legacy name and rename it in place, never append a second entry for the same repo
+    legacy = {n.split("/")[-1] for n, s in SEED_ALIASES.items() if s == slug}
+    same = [e for e in entries if e.get("slug") == slug
+            or str(Path(e.get("path", "")).expanduser().resolve()) == path or e.get("slug") in legacy]
+    # the legacy slugs' local paths are always checked, even when repos.json already holds the new slug: a
+    # partial or hand migration can leave state under the old name, which the routine would then never read
+    # (Codex P2 on #1118). Each path moves, or the whole step refuses before repos.json changes.
+    move_slug_paths(sorted((legacy | {x.get("slug") for x in same}) - {slug, None}), slug, path, done)
+    if same:
+        e = same[0]
+        if e.get("slug") != slug or e.get("path") != path or len(same) > 1:
+            old = e.get("slug")
+            e.update(slug=slug, path=path)
+            entries = [x for x in entries if x is e or not any(x is s for s in same)]
+            reposj.write_text(json.dumps(entries, indent=1) + "\n", encoding="utf-8")
+            done.append(f"repos.json: {old} -> {slug} at {path} (updated in place)")
+        else:
+            done.append(f"repos.json has {slug}")
+    else:
+        entries.append({"slug": slug, "path": path, "base_branch": base})
         reposj.write_text(json.dumps(entries, indent=1) + "\n", encoding="utf-8")
         done.append(f"repos.json += {slug} (enroll it in the routine only after the first enrolled repo completes one cycle)")
     if clone:
@@ -592,8 +775,26 @@ def stage_local(repo: Path, clone: bool = False, home_url: Optional[str] = None)
 
 # ------------------------------------------------------------------ upgrade (RE10)
 
+VENDORED_PREFIX = "tools/docs/"
+# Matches the repos' changelog guard escape (scripts/changelog_guard.py ESCAPES), case-insensitively.
+NO_USER_VISIBLE_LINE = ("No user-visible change: this upgrade changes only the vendored docs tooling "
+                        "(tools/docs and its PIN), which is internal.")
+
+
+def upgrade_body(proof: str, changed: List[str], vd: str = config.DEFAULT_VENDOR_DIR) -> str:
+    """The upgrade PR body. Vendored docs tooling is internal (ruling of 2026-10-12, recorded in the
+    home repo's DECISIONS), so when every changed path is under tools/docs/ the body declares no
+    user-visible change and the repo's changelog check passes. Any other path (the live workflow, docs.json) gets no
+    line, so the changelog check still asks for an entry or a human's declaration."""
+    body = ("Upgrade the vendored manage-docs tools.\n\nLocal trust-root proof (contract section 2):\n\n```\n"
+            + proof + "\n```\n")
+    if changed and all(p.startswith(vd + "/") for p in changed):
+        body += "\n" + NO_USER_VISIBLE_LINE + "\n"
+    return body
+
+
 def upgrade(skill_root: Path, repo: Path, plugins=(), push: bool = True) -> Tuple[int, str]:
-    """Open the vendored tools/docs upgrade PR (branch docs/upgrade-<sha>, auto-merge on green) and run
+    """Open the vendored tools/docs upgrade PR (branch docs/upgrade-<sha>, never auto-merged) and run
     every plugin's layout upgrade to the vendored layout_version in the same PR."""
     repo = Path(repo)
     cfg = config.load(repo) or {}
@@ -610,16 +811,27 @@ def upgrade(skill_root: Path, repo: Path, plugins=(), push: bool = True) -> Tupl
     ok, proof = pin_proof(skill_root, repo)
     if not ok:
         return 1, "upgrade refused: the local trust-root proof failed\n" + proof
-    sh(["git", "add", "-A", "tools/docs"], cwd=repo)
+    # The live workflow is rendered from the vendored template (and the repo's seeds), so a template or
+    # seed change reaches the repo here; the upgrade branch is the one PR the X6 guard lets change it.
+    wf = repo / WORKFLOW_DST
+    wf.parent.mkdir(parents=True, exist_ok=True)
+    wf.write_text(render_workflow(skill_root, repo), encoding="utf-8")
+    # the vendored tools, the live workflow, and what a layout step changed (docs.json; its `git mv`s
+    # are already staged)
+    vd = repo_vendor_dir(repo)
+    sh(["git", "add", "-A", vd, WORKFLOW_DST]
+       + (["docs.json"] if (repo / "docs.json").exists() else []), cwd=repo)
     if sh(["git", "diff", "--cached", "--quiet"], cwd=repo, check=False).returncode == 0:
-        return 0, "upgrade: tools/docs already at " + sha[:12]
-    sh(["git", "commit", "-q", "-m", f"chore(docs): upgrade tools/docs to {sha[:12]}"], cwd=repo)
+        return 0, f"upgrade: {vd} already at " + sha[:12]
+    sh(["git", "commit", "-q", "-m", f"chore(docs): upgrade {vd} to {sha[:12]}"], cwd=repo)
     if not push:
         return 0, proof
     sh(["git", "push", "-q", "origin", f"HEAD:refs/heads/{branch}"], cwd=repo)
-    body = ("Upgrade the vendored manage-docs tools.\n\nLocal trust-root proof (contract section 2):\n\n```\n"
-            + proof + "\n```\n")
+    changed = sh(["git", "show", "--name-only", "--no-renames", "--format=", "HEAD"], cwd=repo).stdout.split()
+    body = upgrade_body(proof, changed, vd)
     out = sh([gh_bin(), "pr", "create", "--base", base, "--head", branch, "--title",
-              f"chore(docs): upgrade tools/docs to {sha[:12]}", "--body", body], cwd=repo).stdout.strip()
-    sh([gh_bin(), "pr", "merge", out, "--auto", "--squash"], cwd=repo, check=False)
+              f"chore(docs): upgrade {vd} to {sha[:12]}", "--body", body], cwd=repo).stdout.strip()
+    # Never `--auto`: an upgrade PR changes the vendored engine, so it needs an independent review at head
+    # like any other PR (.claude/rules/pr-review.md). The daily routine requests that review and merges only
+    # on a clean verdict at head plus green required CI (routine.try_merge_upgrade_pr).
     return 0, f"upgrade PR {out}"
