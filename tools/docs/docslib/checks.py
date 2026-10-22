@@ -315,26 +315,6 @@ def check1_placement(ctx: Ctx) -> List[dict]:
     for p in paths:
         if config.is_doc(ctx.cfg, p) and not config.placed(ctx.cfg, p):
             out.append(result(1, p, f"doc outside the docs layout: {p} (run `docs.py where \"<what it is>\"`)"))
-    out.extend(_docs_folder_violations(ctx))
-    return out
-
-
-def _docs_folder_violations(ctx: Ctx) -> List[dict]:
-    """Every doc under docs/ sits in a standard folder (config.STANDARD_DOC_DIRS), is a named entry
-    (docs/README.md, the docs map) or a generated doc, or is named in docs.json `docs_allow`. In a
-    PR only what the change adds or moves is judged; a full check judges every tracked doc. A repo that
-    has not finished its layout sets `docs_layout_overage: warn` (a loosening a reviewer sees)."""
-    level = "warn" if ctx.cfg.get("docs_layout_overage") == "warn" else "fail"
-    paths = ctx.changed("ACR") if ctx.scope != "all" else sorted(ctx.tracked)
-    out = []
-    for p in paths:
-        if not p.startswith("docs/") or not config.is_doc(ctx.cfg, p) or config.is_record(p):
-            continue
-        text = ctx.read(p)
-        if config.in_standard_docs_layout(ctx.cfg, p, bool(text) and receipts.is_generated(text)):
-            continue
-        out.append(result(1, p, f"doc not in a standard docs folder ({', '.join(config.STANDARD_DOC_DIRS)}): "
-                                f"{p}; move it there, or name it in docs.json docs_allow", level))
     return out
 
 

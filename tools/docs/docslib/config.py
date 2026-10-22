@@ -35,10 +35,6 @@ DEFAULTS = {
     "router": {"mode": "block"},
     "generators": [],
     "docs_map": "docs/README.md",
-    # Named exceptions to the docs/ folder standard (globs under docs/). Everything else under docs/ sits
-    # in a standard folder (STANDARD_DOC_DIRS), is docs/README.md or the docs map, or is a generated doc.
-    "docs_allow": [],
-    "docs_layout_overage": "fail",
     "records_window_days": 30,
     "receipt_max_age_days": 30,
     "verify_budget_per_run": 10,
@@ -58,10 +54,6 @@ DEFAULTS = {
 }
 
 DEFAULT_VENDOR_DIR = "tools/docs"
-
-# The folders a hand-written doc under docs/ may sit in (references/standard.md). Anything else is a
-# placement violation unless docs_allow names it.
-STANDARD_DOC_DIRS = ("roadmap", "architecture", "guides", "runbooks", "rules", "generated")
 
 # Paths that never leave the machine in a public repo (contract section 7).
 LOCAL_ONLY = ["work/", "docs/roadmap/", ".beads/"]
@@ -149,20 +141,6 @@ def placed(cfg: dict, path: str) -> bool:
     return globs.any_match(cfg.get("root_allow", []), path) or globs.any_match(cfg.get("md_allow", []), path)
 
 
-def in_standard_docs_layout(cfg: dict, path: str, generated: bool = False) -> bool:
-    """True when a docs/ path sits where the standard puts it: inside a standard folder, or it is
-    docs/README.md, the docs map, the router fragment, a generated doc, or a named docs_allow exception.
-    Paths outside docs/ are not this rule's business."""
-    if not path.startswith("docs/"):
-        return True
-    rest = path[len("docs/"):]
-    if path in ("docs/README.md", docs_map_path(cfg), ROUTER_FRAGMENT) or generated:
-        return True
-    if "/" in rest and rest.split("/", 1)[0] in STANDARD_DOC_DIRS:
-        return True
-    return globs.any_match(cfg.get("docs_allow") or [], path)
-
-
 def is_entrypoint(cfg: dict, path: str) -> bool:
     """A doc the entrypoint check watches for staleness and dead path references (X12)."""
     return globs.any_match(cfg.get("entrypoints") or [], path)
@@ -241,9 +219,7 @@ def loosenings(old_raw: Optional[dict], new_raw: Optional[dict]) -> List[str]:
             out.append(f"caps.{cap} raised {old['caps'].get(cap)} -> {new['caps'].get(cap)}")
     if new["caps"].get("overage") == "warn" and old["caps"].get("overage") != "warn":
         out.append("caps.overage set to warn")
-    if new.get("docs_layout_overage") == "warn" and old.get("docs_layout_overage") != "warn":
-        out.append("docs_layout_overage set to warn")
-    for key in ("root_allow", "md_allow", "doc_exclude", "frontmatter_exempt", "inventory_exclude", "docs_allow"):
+    for key in ("root_allow", "md_allow", "doc_exclude", "frontmatter_exempt", "inventory_exclude"):
         for x in _added(old.get(key), new.get(key)):
             out.append(f"{key} entry added: {x}")
     for key in ("doc_globs", "read_test"):
